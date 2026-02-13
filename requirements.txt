@@ -1,0 +1,9 @@
+# Deep Research - Dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==14.1
+pydantic==2.10.3
+langgraph==0.2.60
+langchain-core==0.3.28
+httpx==0.28.1
+python-dotenv==1.0.1
