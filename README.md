@@ -41,6 +41,26 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your API keys
 
+# Deep Research - Environment Variables
+
+# OpenRouter (LLM)
+OPENROUTER_API_KEY=
+LLM_MODEL_FAST=
+LLM_MODEL_QUALITY=
+
+# Tavily (Web Search)
+TAVILY_API_KEY =
+
+# Research Settings
+MAX_SEARCH_RESULTS=5
+MAX_RESEARCH_LOOPS=1
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+
+
+
 # 3. Run
 python main.py
 ```
