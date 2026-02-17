@@ -559,4 +559,4 @@ async def _send_ws(research_id: str, event: dict):
 # ============================================================
 def run():
     import uvicorn
-    uvicorn.run(app, host=HOST, port=
+    uvicorn.run(app, host=HOST, port=PORT)
