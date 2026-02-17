@@ -443,12 +443,28 @@ async def _resume_graph(research_id: str):
 
     print(f"[RESUME] Resuming {research_id}, status: {resuming_from_status}")
 
+    # Determine which node produced the current state so LangGraph
+    # knows where to resume from. interrupt_before pauses BEFORE the
+    # target node, so the last executed node is the one before it.
+    # - "clarifying" status → last node was "analyze_query"
+    # - "awaiting_confirmation" status → last node was "generate_plan"
+    as_node = None
+    if resuming_from_status == "clarifying":
+        as_node = "analyze_query"
+    elif resuming_from_status == "awaiting_confirmation":
+        as_node = "generate_plan"
+
     try:
-        graph.update_state(config, current_state)
+        graph.update_state(config, current_state, as_node=as_node)
+        print(f"[RESUME] update_state OK, as_node={as_node}")
     except Exception as e:
         print(f"[RESUME] update_state error: {e}")
 
     prev_count = len(current_state.get("progress", []))
+
+    # Track the previous clarification_message so we can detect NEW ones
+    # (vs replayed old ones from checkpoint)
+    prev_clarification_msg = current_state.get("clarification_message", "")
 
     try:
         event_count = 0
@@ -461,21 +477,31 @@ async def _resume_graph(research_id: str):
             await _stream_progress(research_id, event, prev_count)
             prev_count = len(event.get("progress", []))
 
+            # Skip stale checkpoint replays (first event often replays old state)
             if event_count == 1 and status == resuming_from_status:
+                print(f"[RESUME] Skipping stale replay event #{event_count}")
                 continue
 
-            # HITL: clarification needed (chat message)
+            # HITL: clarification needed again (LLM wants more info)
             if status == "clarifying" and event.get("clarification_message"):
-                conversation = event.get("clarification_conversation", [])
-                conversation.append({"role": "assistant", "content": event["clarification_message"]})
-                event["clarification_conversation"] = conversation
-                session["state"] = event
+                new_msg = event["clarification_message"]
 
-                await _send_ws(research_id, {
-                    "type": "clarification_needed",
-                    "message": event["clarification_message"],
-                })
-                return
+                # Only send if this is a genuinely new message from the LLM
+                if new_msg and new_msg != prev_clarification_msg:
+                    conversation = event.get("clarification_conversation", [])
+                    conversation.append({"role": "assistant", "content": new_msg})
+                    event["clarification_conversation"] = conversation
+                    session["state"] = event
+
+                    await _send_ws(research_id, {
+                        "type": "clarification_needed",
+                        "message": new_msg,
+                    })
+                    return
+                else:
+                    # Stale replay of old clarification — skip
+                    print(f"[RESUME] Skipping stale clarification replay")
+                    continue
 
             # HITL: plan ready for approval
             if status == "awaiting_confirmation" and event.get("plan"):
@@ -533,4 +559,4 @@ async def _send_ws(research_id: str, event: dict):
 # ============================================================
 def run():
     import uvicorn
-    uvicorn.run(app, host=HOST, port=PORT)
+    uvicorn.run(app, host=HOST, port=
