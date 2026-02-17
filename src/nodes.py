@@ -90,10 +90,19 @@ async def analyze_query(state: dict) -> dict:
     state["status"] = "analyzing"
     _progress(state, "🧠 Analyzing query...")
 
+    # Build clarification conversation history for re-analysis
+    clarification_history = ""
+    conversation_log = state.get("clarification_conversation", [])
+    if conversation_log:
+        clarification_history = "\n".join(
+            [f"[{turn['role']}]: {turn['content']}" for turn in conversation_log]
+        )
+
     prompt = QUERY_ANALYZER_PROMPT.format(
         query=state["user_query"],
         chat_history=state.get("chat_history_context", "No history"),
         doc_summaries=state.get("doc_summaries", "No documents"),
+        clarification_conversation=clarification_history or "No clarification conversation yet",
     )
 
     response = await call_llm(prompt, model=state.get("model", ""))
@@ -106,7 +115,7 @@ async def analyze_query(state: dict) -> dict:
 
     state["research_mode"] = analysis.get("mode", "deep")
     state["needs_clarification"] = analysis.get("needs_clarification", False)
-    state["clarification_questions"] = analysis.get("clarification_questions", [])
+    state["clarification_message"] = analysis.get("clarification_message", "")
 
     reasoning = analysis.get("reasoning", "")
     _progress(state, f"🔍 {reasoning}")
@@ -118,7 +127,7 @@ async def analyze_query(state: dict) -> dict:
 
     if state["needs_clarification"]:
         state["status"] = "clarifying"
-        _progress(state, f"❓ Need {len(state['clarification_questions'])} clarification(s)")
+        _progress(state, "❓ Need more details from user")
     else:
         state["status"] = "planning"
 
@@ -133,13 +142,17 @@ async def generate_plan(state: dict) -> dict:
     state["status"] = "planning"
     _progress(state, "📋 Creating research plan...")
 
+    # Include full clarification conversation as context
     clarification_str = ""
-    if state.get("clarification_answers"):
-        clarification_str = json.dumps(state["clarification_answers"])
+    conversation_log = state.get("clarification_conversation", [])
+    if conversation_log:
+        clarification_str = "\n".join(
+            [f"[{turn['role']}]: {turn['content']}" for turn in conversation_log]
+        )
 
     prompt = PLAN_GENERATOR_PROMPT.format(
         query=state["user_query"],
-        clarification_answers=clarification_str or "None",
+        clarification_conversation=clarification_str or "None",
         doc_summaries=state.get("doc_summaries", "No documents"),
         chat_history=state.get("chat_history_context", "No history"),
     )
@@ -203,7 +216,6 @@ async def execute_research(state: dict) -> dict:
 
     async def event_cb(event):
         """Push structured events directly to WebSocket for rich UI."""
-        # Look up callback EACH TIME (not captured once)
         cb = _progress_callbacks.get(rid)
         if cb:
             await cb(event)
@@ -311,7 +323,6 @@ async def synthesize_and_check(state: dict) -> dict:
         state["has_gaps"] = True
         _progress(state, f"🔄 {len(gaps)} gap(s) found, researching more...")
 
-        # Update plan sections with gap-filling queries
         for gap in gaps:
             section_id = gap.get("section_id", "")
             new_queries = gap.get("search_queries", [])
@@ -320,7 +331,6 @@ async def synthesize_and_check(state: dict) -> dict:
                     if section["id"] == section_id:
                         section["search_queries"] = new_queries
                         break
-                # Reset that section's todo
                 for todo in state.get("todos", []):
                     if todo["id"] == section_id:
                         todo["status"] = "pending"
@@ -380,7 +390,6 @@ async def write_report(state: dict) -> dict:
         all_sources=sources_str or "No sources",
     )
 
-    # Use QUALITY model for the final report
     report = await call_llm(
         prompt,
         model=LLM_MODEL_QUALITY,
@@ -409,7 +418,6 @@ async def simple_answer(state: dict) -> dict:
     state["status"] = "writing"
     _progress(state, "📝 Generating answer...")
 
-    # Quick search
     results = await tavily_search(state["user_query"], max_results=3)
     search_context = "\n".join(
         [f"- {r['title']}: {r['content'][:200]}" for r in results]
@@ -447,10 +455,12 @@ Provide a clear, well-formatted answer in Markdown."""
 # HITL PASSTHROUGH NODES
 # ============================================================
 async def clarification_passthrough(state: dict) -> dict:
-    """Passthrough after user provides clarification answers."""
+    """Passthrough after user provides clarification answer via chat."""
+    # The user's answer is already appended to clarification_conversation
+    # by the API layer before resuming. Just update status and re-route.
     state["needs_clarification"] = False
-    state["status"] = "planning"
-    _progress(state, "💬 Clarification received, continuing...")
+    state["status"] = "analyzing"
+    _progress(state, "💬 Got your response, re-analyzing...")
     return state
 
 
@@ -495,8 +505,8 @@ def route_after_analysis(state: dict) -> str:
 
 
 def route_after_clarification(state: dict) -> str:
-    """After clarification, go straight to plan — don't re-analyze."""
-    return "generate_plan"
+    """After clarification, loop back to analyze_query for re-analysis."""
+    return "analyze_query"
 
 
 def route_after_plan(state: dict) -> str:
