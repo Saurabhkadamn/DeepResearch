@@ -168,6 +168,8 @@ async function sendMessage(){
     addBubble('user', msg);
     ws.send(JSON.stringify({type:'clarify', message: msg}));
     waitingForClarification=false;
+    document.getElementById('sendBtn').disabled=true;
+    document.getElementById('userInput').placeholder='Analyzing your response...';
     return;
   }
 
@@ -364,11 +366,4 @@ function finishTracker(){
     const header=el.querySelector('.tracker-header');
     if(header) header.innerHTML='<span style="color:var(--green)">✅ Research complete</span>';
     const footer=el.querySelector('.tracker-footer');
-    if(footer) footer.innerHTML='<span>Done</span><span>'+completedSections+' sections · '+Object.keys(vfsState).length+' files</span>';
-  }
-  trackerId=null;
-}
-
-function toggleSec(card){card.classList.toggle('expanded')}
-
-// ── Simple progress
+    if(footer) footer.innerHTML='<span>Done</span><span>'+completedSections+' sections · '+Object.keys(vfsS
