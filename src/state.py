@@ -39,8 +39,8 @@ def create_initial_state(
         # Query Analysis
         "research_mode": "",  # "simple" | "deep"
         "needs_clarification": False,
-        "clarification_questions": [],
-        "clarification_answers": {},
+        "clarification_message": "",  # LLM's natural language message to user
+        "clarification_conversation": [],  # [{role, content}, ...] full conversation log
 
         # Planning (todo tool)
         "todos": [],
