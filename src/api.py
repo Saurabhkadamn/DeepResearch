@@ -62,7 +62,7 @@ class PlanActionRequest(BaseModel):
     edits: dict = Field(default_factory=dict)
 
 class ClarifyRequest(BaseModel):
-    answers: dict
+    message: str  # Free-text chat message from user
 
 
 # ============================================================
@@ -134,18 +134,13 @@ async def normal_chat(request: ChatRequest):
     if not chat_id:
         chat_id = create_chat(request.message[:50])
 
-    # Save user message
     add_message(chat_id, "user", request.message, "chat")
 
-    # Build message list with history
     history = get_messages_for_context(chat_id, limit=10)
     messages = [{"role": "system", "content": "You are a helpful AI assistant."}]
     messages.extend(history)
 
-    # Call LLM
     reply = await call_llm_simple(messages, model=request.model)
-
-    # Save assistant reply
     add_message(chat_id, "assistant", reply, "chat")
 
     return ChatResponse(reply=reply, chat_id=chat_id)
@@ -161,7 +156,6 @@ async def start_research(request: StartResearchRequest):
     if not chat_id:
         chat_id = create_chat(f"Research: {request.query[:40]}")
 
-    # Save user query to chat
     add_message(chat_id, "user", request.query, "chat")
 
     research_id = str(uuid.uuid4())[:8]
@@ -191,7 +185,7 @@ async def start_research(request: StartResearchRequest):
 
 
 # ============================================================
-# DEEP RESEARCH - CLARIFY
+# DEEP RESEARCH - CLARIFY (now chat-based)
 # ============================================================
 @app.post("/api/v1/deep-research/{research_id}/clarify")
 async def submit_clarification(research_id: str, request: ClarifyRequest):
@@ -199,9 +193,13 @@ async def submit_clarification(research_id: str, request: ClarifyRequest):
         raise HTTPException(404, "Session not found")
 
     session = research_sessions[research_id]
-    session["state"]["clarification_answers"] = request.answers
 
-    await _send_ws(research_id, {"type": "progress", "message": "💬 Clarification received"})
+    # Append user's chat message to the clarification conversation log
+    conversation = session["state"].get("clarification_conversation", [])
+    conversation.append({"role": "user", "content": request.message})
+    session["state"]["clarification_conversation"] = conversation
+
+    await _send_ws(research_id, {"type": "progress", "message": "💬 Got your response..."})
     asyncio.create_task(_resume_graph(research_id))
     return {"status": "processing"}
 
@@ -266,7 +264,6 @@ async def get_report(research_id: str):
     if state.get("status") != "completed":
         raise HTTPException(400, f"Not completed. Status: {state.get('status')}")
 
-    # Deduplicate sources
     sources = []
     seen = set()
     for s in state.get("all_sources", []):
@@ -311,7 +308,13 @@ async def ws_endpoint(websocket: WebSocket, research_id: str):
 
                 if msg_type == "clarify":
                     session = research_sessions[research_id]
-                    session["state"]["clarification_answers"] = data.get("answers", {})
+                    user_message = data.get("message", "")
+
+                    # Append to clarification conversation
+                    conversation = session["state"].get("clarification_conversation", [])
+                    conversation.append({"role": "user", "content": user_message})
+                    session["state"]["clarification_conversation"] = conversation
+
                     asyncio.create_task(_resume_graph(research_id))
 
                 elif msg_type == "confirm_plan":
@@ -344,13 +347,10 @@ async def _run_graph(research_id: str):
     if not session:
         return
 
-    # Register real-time progress callback
     async def rt_progress(msg):
         if isinstance(msg, dict):
-            # Structured research event
             await _send_ws(research_id, {"type": "research_event", **msg})
         else:
-            # Simple text progress
             await _send_ws(research_id, {"type": "progress", "message": msg})
     register_progress_callback(research_id, rt_progress)
 
@@ -371,12 +371,17 @@ async def _run_graph(research_id: str):
             await _stream_progress(research_id, event, prev_count)
             prev_count = len(event.get("progress", []))
 
-            status = event.get("status", "")
+            # HITL: clarification needed (now sends a chat message)
+            if status == "clarifying" and event.get("clarification_message"):
+                # Add the LLM's clarification message to the conversation log
+                conversation = event.get("clarification_conversation", [])
+                conversation.append({"role": "assistant", "content": event["clarification_message"]})
+                event["clarification_conversation"] = conversation
+                session["state"] = event
 
-            if status == "clarifying" and event.get("clarification_questions"):
                 await _send_ws(research_id, {
                     "type": "clarification_needed",
-                    "questions": event["clarification_questions"],
+                    "message": event["clarification_message"],
                 })
                 return
 
@@ -389,7 +394,6 @@ async def _run_graph(research_id: str):
                 return
 
             if status == "completed":
-                # Save report to chat history
                 chat_id = session.get("chat_id", "")
                 if chat_id:
                     add_message(chat_id, "assistant", event.get("report", ""), "research_report")
@@ -423,7 +427,6 @@ async def _resume_graph(research_id: str):
     if not session:
         return
 
-    # Register real-time progress callback (same as _run_graph)
     async def rt_progress(msg):
         mtype = msg.get("event", "?") if isinstance(msg, dict) else "text"
         print(f"[RT_PROGRESS] type={mtype}, ws={research_id in ws_connections}")
@@ -458,16 +461,19 @@ async def _resume_graph(research_id: str):
             await _stream_progress(research_id, event, prev_count)
             prev_count = len(event.get("progress", []))
 
-            # Skip the first event if its status matches what we're resuming from
-            # (it's the stale checkpoint replay)
             if event_count == 1 and status == resuming_from_status:
                 continue
 
-            # HITL: clarification needed
-            if status == "clarifying" and event.get("clarification_questions"):
+            # HITL: clarification needed (chat message)
+            if status == "clarifying" and event.get("clarification_message"):
+                conversation = event.get("clarification_conversation", [])
+                conversation.append({"role": "assistant", "content": event["clarification_message"]})
+                event["clarification_conversation"] = conversation
+                session["state"] = event
+
                 await _send_ws(research_id, {
                     "type": "clarification_needed",
-                    "questions": event["clarification_questions"],
+                    "message": event["clarification_message"],
                 })
                 return
 
