@@ -29,7 +29,7 @@ def build_research_graph():
 
     Flow:
     collect_context → analyze_query ─┬→ simple_answer → END
-                                     ├→ wait_for_clarification → generate_plan
+                                     ├→ wait_for_clarification → analyze_query (loop)
                                      └→ generate_plan → wait_for_confirmation
                                             → execute_research ←──┐
                                             → synthesize_and_check ┘ (if gaps)
@@ -67,12 +67,12 @@ def build_research_graph():
 
     graph.add_edge("simple_answer", END)
 
-    # After clarification → go straight to plan (don't re-analyze)
+    # After clarification → loop back to analyze_query (re-analyze with new context)
     graph.add_conditional_edges(
         "wait_for_clarification",
         route_after_clarification,
         {
-            "generate_plan": "generate_plan",
+            "analyze_query": "analyze_query",
         },
     )
 
