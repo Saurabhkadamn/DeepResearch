@@ -97,8 +97,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .btn-approve:hover:not(:disabled){background:#4ade80}
 .btn-cancel{background:var(--red);color:#fff}
 .btn-cancel:hover:not(:disabled){background:#fb9090}
-.clarify-input{width:100%;padding:8px 10px;margin-top:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font:13px 'DM Sans';outline:none}
-.clarify-input:focus{border-color:var(--accent)}
 .report-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;margin:12px 0}
 .report-wrap h1{font-size:18px;color:var(--accent2);margin:14px 0 8px}
 .report-wrap h2{font-size:15px;color:var(--accent2);margin:12px 0 6px}
@@ -145,19 +143,39 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <script>
 const API='';
 let chatId=null,deepMode=false,researchId=null,ws=null;
+let waitingForClarification=false; // track if we're in clarification chat mode
 
 // ── Tracker state ──
 let trackerId=null;
-let sectionState={};  // {sec_id: {title,status,queries,urls,docs,confidence,content_size}}
-let vfsState={};       // {path: {size,status}}
+let sectionState={};
+let vfsState={};
 let roundNum=0, completedSections=0, totalSections=0;
 
 // ── Chat management ──
 async function loadChats(){const r=await fetch(API+'/api/v1/chats');const d=await r.json();const el=document.getElementById('chatList');el.innerHTML='';d.chats.forEach(c=>{const div=document.createElement('div');div.className='chat-item'+(c.chat_id===chatId?' active':'');div.textContent=c.title||'Untitled';div.onclick=()=>loadChat(c.chat_id);el.appendChild(div)})}
-async function newChat(){const r=await fetch(API+'/api/v1/chats',{method:'POST'});const d=await r.json();chatId=d.chat_id;document.getElementById('messages').innerHTML='';document.getElementById('chatTitle').textContent='New Chat';loadChats()}
-async function loadChat(id){chatId=id;const r=await fetch(API+'/api/v1/chats/'+id+'/messages');const d=await r.json();const el=document.getElementById('messages');el.innerHTML='';d.messages.forEach(m=>addBubble(m.role,m.content,m.type));el.scrollTop=el.scrollHeight;loadChats()}
+async function newChat(){const r=await fetch(API+'/api/v1/chats',{method:'POST'});const d=await r.json();chatId=d.chat_id;document.getElementById('messages').innerHTML='';document.getElementById('chatTitle').textContent='New Chat';waitingForClarification=false;loadChats()}
+async function loadChat(id){chatId=id;const r=await fetch(API+'/api/v1/chats/'+id+'/messages');const d=await r.json();const el=document.getElementById('messages');el.innerHTML='';d.messages.forEach(m=>addBubble(m.role,m.content,m.type));el.scrollTop=el.scrollHeight;waitingForClarification=false;loadChats()}
 function toggleDeep(){deepMode=!deepMode;document.getElementById('deepToggle').classList.toggle('on',deepMode)}
-async function sendMessage(){const inp=document.getElementById('userInput');const msg=inp.value.trim();if(!msg)return;inp.value='';addBubble('user',msg);if(!chatId){const r=await fetch(API+'/api/v1/chats',{method:'POST'});chatId=(await r.json()).chat_id}deepMode?startDeepResearch(msg):normalChat(msg)}
+
+async function sendMessage(){
+  const inp=document.getElementById('userInput');
+  const msg=inp.value.trim();
+  if(!msg)return;
+  inp.value='';
+
+  // If waiting for clarification, send as clarification reply
+  if(waitingForClarification && ws && ws.readyState===1){
+    addBubble('user', msg);
+    ws.send(JSON.stringify({type:'clarify', message: msg}));
+    waitingForClarification=false;
+    return;
+  }
+
+  addBubble('user',msg);
+  if(!chatId){const r=await fetch(API+'/api/v1/chats',{method:'POST'});chatId=(await r.json()).chat_id}
+  deepMode?startDeepResearch(msg):normalChat(msg);
+}
+
 async function normalChat(msg){document.getElementById('sendBtn').disabled=true;try{const r=await fetch(API+'/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,chat_id:chatId})});const d=await r.json();chatId=d.chat_id;addBubble('assistant',d.reply);loadChats()}catch(e){addBubble('assistant','Error: '+e.message)}document.getElementById('sendBtn').disabled=false}
 
 // ── Deep Research ──
@@ -166,6 +184,7 @@ async function startDeepResearch(query){
   document.getElementById('progressPanel').style.display='block';
   document.getElementById('todoList').innerHTML='';
   sectionState={};vfsState={};roundNum=0;completedSections=0;totalSections=0;trackerId=null;
+  waitingForClarification=false;
   try{
     const r=await fetch(API+'/api/v1/deep-research/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,chat_id:chatId})});
     const d=await r.json();researchId=d.research_id;chatId=d.chat_id;
@@ -180,22 +199,35 @@ function handleWS(msg){
   switch(msg.type){
     case 'progress': addSimpleProgress(msg.message); break;
     case 'research_event': handleResearchEvent(msg); break;
-    case 'clarification_needed': showClarification(msg.questions); break;
+    case 'clarification_needed':
+      // Show as a normal chat bubble from the assistant
+      addBubble('assistant', msg.message);
+      // Enable input for user to reply naturally
+      waitingForClarification=true;
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Reply to continue...';
+      document.getElementById('userInput').focus();
+      break;
     case 'plan_ready': showPlan(msg.plan,msg.todos); break;
     case 'report_complete':
       finishTracker();
       addBubble('assistant',msg.report,'research_report');
       updateTodos(msg.todos);
       document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
       loadChats(); break;
     case 'cancelled':
       finishTracker();
       addBubble('assistant','Research cancelled.');
-      document.getElementById('sendBtn').disabled=false; break;
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
+      break;
     case 'error':
       finishTracker();
       addBubble('assistant','Error: '+msg.message);
-      document.getElementById('sendBtn').disabled=false; break;
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
+      break;
     case 'heartbeat': break;
   }
 }
@@ -217,7 +249,6 @@ function handleResearchEvent(e){
       renderTracker(); break;
 
     case 'search_start':
-      // Mark query as active
       renderTracker(); break;
 
     case 'search_result':
@@ -276,14 +307,12 @@ function renderTracker(){
   const secIds=Object.keys(sectionState);
   if(secIds.length===0)return;
 
-  // Update header
   const el=document.getElementById(trackerId);
   const header=el?el.querySelector('.tracker-header'):null;
   if(header) header.innerHTML='<div class="spinner"></div><span>Researching — Round '+roundNum+'</span>';
 
   let html='';
 
-  // Section cards
   secIds.forEach(id=>{
     const s=sectionState[id];
     const isExpanded=(s.status==='searching'||s.status==='analyzing');
@@ -313,7 +342,6 @@ function renderTracker(){
     html+='</div></div>';
   });
 
-  // VFS panel
   const vfsPaths=Object.keys(vfsState);
   if(vfsPaths.length>0){
     html+='<div class="vfs-panel"><div class="vfs-header">📁 Virtual Filesystem</div>';
@@ -324,7 +352,6 @@ function renderTracker(){
     html+='</div>';
   }
 
-  // Footer
   html+='<div class="tracker-footer"><span>Round '+roundNum+'/3</span><span>'+completedSections+' of '+totalSections+' sections</span></div>';
 
   sectionsEl.innerHTML=html;
@@ -344,72 +371,4 @@ function finishTracker(){
 
 function toggleSec(card){card.classList.toggle('expanded')}
 
-// ── Simple progress (for non-research phases) ──
-function addSimpleProgress(text){
-  ensureTracker();
-  const body=document.getElementById(trackerId+'-simple');if(!body)return;
-  const step=document.createElement('div');
-  step.style.cssText='font-size:12px;padding:3px 16px;color:var(--text2);animation:fadeIn .3s';
-  step.textContent=text;
-  body.appendChild(step);
-  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
-}
-
-// ── UI Builders ──
-function addBubble(role,content,type){
-  const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg '+role;
-  if(type==='research_report'){div.innerHTML='<div class="msg-role">Research Report</div><div class="report-wrap">'+md(content)+'</div>'}
-  else{div.innerHTML='<div class="msg-role">'+role+'</div><div class="bubble">'+md(content)+'</div>'}
-  container.appendChild(div);container.scrollTop=container.scrollHeight;
-}
-function showClarification(questions){
-  const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg assistant';
-  let html='<div class="msg-role">Clarification</div><div class="plan-card"><h4>I need a few details:</h4>';
-  questions.forEach((q,i)=>{html+='<div style="margin:8px 0"><div style="font-size:12px;color:var(--text)">'+q+'</div><input type="text" class="clarify-input" id="cq_'+i+'"></div>'});
-  html+='<div class="plan-actions"><button class="btn-approve" onclick="submitClarify('+questions.length+')">Submit</button></div></div>';
-  div.innerHTML=html;container.appendChild(div);container.scrollTop=container.scrollHeight;
-}
-function submitClarify(n){
-  const answers={};for(let i=0;i<n;i++){const el=document.getElementById('cq_'+i);answers['q'+(i+1)]=el?el.value:''}
-  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'clarify',answers}));
-  document.querySelectorAll('.clarify-input').forEach(el=>el.disabled=true);
-  document.querySelectorAll('.btn-approve').forEach(el=>{el.disabled=true;el.textContent='Submitted ✓'});
-}
-function showPlan(plan,todos){
-  updateTodos(todos);const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg assistant';
-  let html='<div class="msg-role">Research Plan</div><div class="plan-card"><h4>'+(plan.summary||'Research Plan')+'</h4>';
-  html+='<div class="plan-meta">~'+(plan.estimated_time_seconds||90)+'s estimated · '+(plan.sections||[]).length+' sections</div>';
-  (plan.sections||[]).forEach((s,i)=>{html+='<div class="plan-section"><strong>'+(i+1)+'. '+s.title+'</strong>';if(s.description)html+='<div class="desc">'+s.description+'</div>';if(s.search_queries)html+='<div class="queries">'+s.search_queries.join(' · ')+'</div>';html+='</div>'});
-  html+='<div class="plan-actions"><button class="btn-approve" id="approveBtn" onclick="approvePlan()">✅ Approve & Start</button>';
-  html+='<button class="btn-cancel" id="cancelBtn" onclick="cancelPlan()">✗ Cancel</button></div></div>';
-  div.innerHTML=html;container.appendChild(div);container.scrollTop=container.scrollHeight;
-}
-function approvePlan(){
-  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
-  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'approve'}));
-}
-function cancelPlan(){
-  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
-  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'cancel'}));
-  document.getElementById('sendBtn').disabled=false;
-}
-function updateTodos(todos){
-  if(!todos)return;const el=document.getElementById('todoList');el.innerHTML='';
-  todos.forEach(t=>{const d=document.createElement('div');const cls=t.status==='done'?'todo-done':t.status==='in_progress'?'todo-progress':'todo-pending';const icon=t.status==='done'?'✅':t.status==='in_progress'?'🔄':'⬜';d.className='todo-item '+cls;d.textContent=icon+' '+t.task;el.appendChild(d)});
-}
-function escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
-function md(text){
-  if(!text)return '';
-  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style="background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:12px;margin:8px 0"><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g,'<code style="background:var(--bg);padding:2px 5px;border-radius:3px;font-size:12px">$1</code>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    .replace(/^---$/gm,'<hr>').replace(/^\- (.+)$/gm,'<li>$1</li>').replace(/^\* (.+)$/gm,'<li>$1</li>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
-    .replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');
-}
-loadChats();
-</script>
-</body>
-</html>
+// ── Simple progress
