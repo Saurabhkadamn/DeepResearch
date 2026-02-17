@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Research Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0c0c12;--bg2:#13131d;--bg3:#1a1a28;--bg4:#21212f;--border:#222235;--text:#d4d4e0;--text2:#8888a0;--text3:#555568;--accent:#7c6cf7;--accent2:#9d8fff;--green:#34d399;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;--cyan:#22d3ee;--mono:'JetBrains Mono',monospace}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden}
+.sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-brand{padding:18px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px;color:var(--accent2);letter-spacing:-.3px}
+.new-chat-btn{margin:10px;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font:600 13px 'DM Sans';transition:background .2s}
+.new-chat-btn:hover{background:var(--accent2)}
+.chat-list{flex:1;overflow-y:auto;padding:4px 8px}
+.chat-item{padding:9px 12px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s}
+.chat-item:hover,.chat-item.active{background:var(--bg3);color:var(--text)}
+.progress-panel{border-top:1px solid var(--border);max-height:280px;overflow-y:auto}
+.progress-section-title{font-size:11px;font-weight:600;color:var(--accent);padding:10px 12px 4px;text-transform:uppercase;letter-spacing:.5px}
+.todo-item{font-size:11.5px;padding:3px 12px;line-height:1.6}
+.todo-done{color:var(--green)}.todo-pending{color:var(--text2)}.todo-progress{color:var(--yellow)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-header{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.chat-header h2{font-size:15px;font-weight:600}
+.toggle-area{display:flex;align-items:center;gap:8px}
+.toggle-label{font-size:12px;color:var(--text2)}
+.toggle{width:38px;height:20px;background:#333;border-radius:10px;cursor:pointer;position:relative;transition:background .2s}
+.toggle.on{background:var(--accent)}
+.toggle::after{content:'';width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s}
+.toggle.on::after{left:20px}
+.messages{flex:1;overflow-y:auto;padding:24px}
+.msg{margin-bottom:18px;max-width:90%;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{margin-left:auto}
+.msg.user .bubble{background:var(--accent);color:#fff;border-radius:14px 14px 4px 14px}
+.msg.assistant .bubble{background:var(--bg3);border-radius:14px 14px 14px 4px;border:1px solid var(--border)}
+.bubble{padding:12px 16px;font-size:13.5px;line-height:1.65}
+.msg-role{font-size:10px;color:var(--text2);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:.4px}
+.msg.user .msg-role{text-align:right}
+
+/* Research Tracker */
+.tracker{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin:12px 0;overflow:hidden}
+.tracker-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg3)}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tracker-header span{font-size:13px;font-weight:600;color:var(--accent2)}
+.tracker-body{padding:8px 0}
+.tracker-footer{padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between}
+
+/* Section card */
+.sec-card{margin:4px 12px;border-radius:8px;border:1px solid var(--border);overflow:hidden;transition:border-color .3s}
+.sec-card.active{border-color:var(--accent)}
+.sec-card.done{border-color:var(--green)}
+.sec-header{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg3);cursor:pointer;font-size:12px;font-weight:600}
+.sec-header .icon{width:16px;text-align:center;flex-shrink:0}
+.sec-header .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec-header .badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500;font-family:var(--mono)}
+.badge-searching{background:#7c6cf730;color:var(--accent2)}
+.badge-analyzing{background:#fbbf2430;color:var(--yellow)}
+.badge-done{background:#34d39930;color:var(--green)}
+.badge-waiting{background:#33334430;color:var(--text3)}
+.sec-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
+.sec-card.expanded .sec-body{max-height:500px;padding:8px 12px;overflow-y:auto}
+
+/* Search items inside section */
+.search-q{font-size:11px;color:var(--text2);margin:4px 0 2px;font-family:var(--mono)}
+.search-q::before{content:'→ ';color:var(--accent)}
+.url-item{font-size:11px;padding:1px 0 1px 16px;color:var(--text3);display:flex;gap:4px;animation:fadeIn .2s}
+.url-item .domain{color:var(--cyan);min-width:0}
+.url-item .sep{color:var(--text3)}
+.url-item .title-text{color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-item{font-size:11px;padding:2px 0 2px 16px;color:var(--yellow)}
+.sec-meta{font-size:11px;color:var(--green);padding:4px 0;margin-top:4px;border-top:1px solid var(--border)}
+
+/* VFS panel */
+.vfs-panel{margin:8px 12px;border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.vfs-header{padding:6px 12px;background:var(--bg3);font-size:11px;font-weight:600;color:var(--text2)}
+.vfs-row{display:flex;padding:3px 12px;font-size:11px;font-family:var(--mono);gap:8px;border-top:1px solid #1a1a25}
+.vfs-path{color:var(--cyan);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vfs-size{color:var(--text2);width:50px;text-align:right}
+.vfs-status{width:20px;text-align:center}
+
+/* Plan card */
+.plan-card{background:var(--bg2);border:1px solid var(--accent);border-radius:12px;padding:18px;margin:12px 0}
+.plan-card h4{color:var(--accent2);margin-bottom:6px;font-size:14px}
+.plan-meta{font-size:11px;color:var(--text2);margin-bottom:10px}
+.plan-section{font-size:12px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
+.plan-section:last-of-type{border:none}
+.plan-section strong{color:var(--text)}
+.plan-section .desc{color:var(--text2);font-size:11px;margin-top:2px}
+.plan-section .queries{color:#555;font-size:10px;margin-top:2px;font-family:var(--mono)}
+.plan-actions{display:flex;gap:8px;margin-top:14px}
+.plan-actions button{padding:8px 20px;border-radius:6px;border:none;cursor:pointer;font:600 12px 'DM Sans';transition:all .15s}
+.plan-actions button:disabled{opacity:.4;cursor:not-allowed}
+.btn-approve{background:var(--green);color:#0a0a0a}
+.btn-approve:hover:not(:disabled){background:#4ade80}
+.btn-cancel{background:var(--red);color:#fff}
+.btn-cancel:hover:not(:disabled){background:#fb9090}
+.report-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;margin:12px 0}
+.report-wrap h1{font-size:18px;color:var(--accent2);margin:14px 0 8px}
+.report-wrap h2{font-size:15px;color:var(--accent2);margin:12px 0 6px}
+.report-wrap h3{font-size:13px;color:var(--accent);margin:10px 0 4px}
+.report-wrap p{font-size:13px;line-height:1.7;margin:5px 0}
+.report-wrap a{color:var(--blue);text-decoration:none}
+.report-wrap a:hover{text-decoration:underline}
+.report-wrap hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.report-wrap li{font-size:13px;line-height:1.6}
+.input-area{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px}
+.input-area input{flex:1;padding:11px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font:13.5px 'DM Sans';outline:none}
+.input-area input:focus{border-color:var(--accent)}
+.input-area button{padding:11px 22px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font:600 13px 'DM Sans';transition:background .15s}
+.input-area button:hover:not(:disabled){background:var(--accent2)}
+.input-area button:disabled{background:#333;cursor:not-allowed}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-brand">🔬 Deep Research</div>
+  <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+  <div class="chat-list" id="chatList"></div>
+  <div class="progress-panel" id="progressPanel" style="display:none">
+    <div class="progress-section-title">Tasks</div>
+    <div id="todoList"></div>
+  </div>
+</div>
+<div class="main">
+  <div class="chat-header">
+    <h2 id="chatTitle">New Chat</h2>
+    <div class="toggle-area">
+      <span class="toggle-label">Deep Research</span>
+      <div class="toggle" id="deepToggle" onclick="toggleDeep()"></div>
+    </div>
+  </div>
+  <div class="messages" id="messages"></div>
+  <div class="input-area">
+    <input type="text" id="userInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+const API='';
+let chatId=null,deepMode=false,researchId=null,ws=null;
+let waitingForClarification=false; // track if we're in clarification chat mode
+
+// ── Tracker state ──
+let trackerId=null;
+let sectionState={};
+let vfsState={};
+let roundNum=0, completedSections=0, totalSections=0;
+
+// ── Chat management ──
+async function loadChats(){const r=await fetch(API+'/api/v1/chats');const d=await r.json();const el=document.getElementById('chatList');el.innerHTML='';d.chats.forEach(c=>{const div=document.createElement('div');div.className='chat-item'+(c.chat_id===chatId?' active':'');div.textContent=c.title||'Untitled';div.onclick=()=>loadChat(c.chat_id);el.appendChild(div)})}
+async function newChat(){const r=await fetch(API+'/api/v1/chats',{method:'POST'});const d=await r.json();chatId=d.chat_id;document.getElementById('messages').innerHTML='';document.getElementById('chatTitle').textContent='New Chat';waitingForClarification=false;loadChats()}
+async function loadChat(id){chatId=id;const r=await fetch(API+'/api/v1/chats/'+id+'/messages');const d=await r.json();const el=document.getElementById('messages');el.innerHTML='';d.messages.forEach(m=>addBubble(m.role,m.content,m.type));el.scrollTop=el.scrollHeight;waitingForClarification=false;loadChats()}
+function toggleDeep(){deepMode=!deepMode;document.getElementById('deepToggle').classList.toggle('on',deepMode)}
+
+async function sendMessage(){
+  const inp=document.getElementById('userInput');
+  const msg=inp.value.trim();
+  if(!msg)return;
+  inp.value='';
+
+  // If waiting for clarification, send as clarification reply
+  if(waitingForClarification && ws && ws.readyState===1){
+    addBubble('user', msg);
+    ws.send(JSON.stringify({type:'clarify', message: msg}));
+    waitingForClarification=false;
+    document.getElementById('sendBtn').disabled=true;
+    document.getElementById('userInput').placeholder='Analyzing your response...';
+    return;
+  }
+
+  addBubble('user',msg);
+  if(!chatId){const r=await fetch(API+'/api/v1/chats',{method:'POST'});chatId=(await r.json()).chat_id}
+  deepMode?startDeepResearch(msg):normalChat(msg);
+}
+
+async function normalChat(msg){document.getElementById('sendBtn').disabled=true;try{const r=await fetch(API+'/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,chat_id:chatId})});const d=await r.json();chatId=d.chat_id;addBubble('assistant',d.reply);loadChats()}catch(e){addBubble('assistant','Error: '+e.message)}document.getElementById('sendBtn').disabled=false}
+
+// ── Deep Research ──
+async function startDeepResearch(query){
+  document.getElementById('sendBtn').disabled=true;
+  document.getElementById('progressPanel').style.display='block';
+  document.getElementById('todoList').innerHTML='';
+  sectionState={};vfsState={};roundNum=0;completedSections=0;totalSections=0;trackerId=null;
+  waitingForClarification=false;
+  try{
+    const r=await fetch(API+'/api/v1/deep-research/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,chat_id:chatId})});
+    const d=await r.json();researchId=d.research_id;chatId=d.chat_id;
+    ws=new WebSocket('ws://'+location.host+d.ws_url);
+    ws.onmessage=e=>handleWS(JSON.parse(e.data));
+    ws.onerror=()=>{addBubble('assistant','WebSocket error');document.getElementById('sendBtn').disabled=false};
+    ws.onclose=()=>{document.getElementById('sendBtn').disabled=false};
+  }catch(e){addBubble('assistant','Error: '+e.message);document.getElementById('sendBtn').disabled=false}
+}
+
+function handleWS(msg){
+  switch(msg.type){
+    case 'progress': addSimpleProgress(msg.message); break;
+    case 'research_event': handleResearchEvent(msg); break;
+    case 'clarification_needed':
+      // Show as a normal chat bubble from the assistant
+      addBubble('assistant', msg.message);
+      // Enable input for user to reply naturally
+      waitingForClarification=true;
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Reply to continue...';
+      document.getElementById('userInput').focus();
+      break;
+    case 'plan_ready': showPlan(msg.plan,msg.todos); break;
+    case 'report_complete':
+      finishTracker();
+      addBubble('assistant',msg.report,'research_report');
+      updateTodos(msg.todos);
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
+      loadChats(); break;
+    case 'cancelled':
+      finishTracker();
+      addBubble('assistant','Research cancelled.');
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
+      break;
+    case 'error':
+      finishTracker();
+      addBubble('assistant','Error: '+msg.message);
+      document.getElementById('sendBtn').disabled=false;
+      document.getElementById('userInput').placeholder='Type a message...';
+      break;
+    case 'heartbeat': break;
+  }
+}
+
+// ── Research event handler (structured events from sub-agents) ──
+function handleResearchEvent(e){
+  ensureTracker();
+  switch(e.event){
+    case 'research_start':
+      totalSections=e.total;completedSections=0;roundNum++;
+      e.sections.forEach(s=>{
+        if(!sectionState[s.id]) sectionState[s.id]={title:s.title,status:'waiting',queries:s.queries||[],urls:{},docs:[],confidence:0,content_size:0};
+        else sectionState[s.id].status='waiting';
+      });
+      renderTracker(); break;
+
+    case 'section_start':
+      if(sectionState[e.section_id]) sectionState[e.section_id].status='searching';
+      renderTracker(); break;
+
+    case 'search_start':
+      renderTracker(); break;
+
+    case 'search_result':
+      if(sectionState[e.section_id]){
+        const s=sectionState[e.section_id];
+        if(!s.urls[e.query]) s.urls[e.query]=[];
+        s.urls[e.query].push({domain:e.domain,title:e.title,url:e.url});
+      }
+      renderTracker(); break;
+
+    case 'search_done':
+      renderTracker(); break;
+
+    case 'docs_found':
+      if(sectionState[e.section_id]) sectionState[e.section_id].docs=e.filenames||[];
+      renderTracker(); break;
+
+    case 'analyzing':
+      if(sectionState[e.section_id]) sectionState[e.section_id].status='analyzing';
+      renderTracker(); break;
+
+    case 'section_done':
+      if(sectionState[e.section_id]){
+        const s=sectionState[e.section_id];
+        s.status='done'; s.confidence=e.confidence||0; s.content_size=e.content_size||0;
+        completedSections++;
+      }
+      renderTracker(); break;
+
+    case 'vfs_write':
+      vfsState[e.path]={size:e.size||0,status:'done'};
+      renderTracker(); break;
+
+    case 'progress_update':
+      completedSections=e.completed;totalSections=e.total;
+      renderTracker(); break;
+
+    case 'research_round_done':
+      renderTracker(); break;
+  }
+}
+
+// ── Tracker rendering ──
+function ensureTracker(){
+  if(trackerId && document.getElementById(trackerId)) return;
+  const id='tracker-'+Date.now(); trackerId=id;
+  const container=document.getElementById('messages');
+  const div=document.createElement('div');div.className='msg assistant';div.style.maxWidth='100%';
+  div.innerHTML='<div class="msg-role">Research Agent</div><div class="tracker" id="'+id+'"><div class="tracker-header"><div class="spinner"></div><span>Researching...</span></div><div class="tracker-body" id="'+id+'-simple"></div><div id="'+id+'-sections"></div></div>';
+  container.appendChild(div);
+  container.scrollTop=container.scrollHeight;
+}
+
+function renderTracker(){
+  const sectionsEl=document.getElementById(trackerId+'-sections');if(!sectionsEl)return;
+  const secIds=Object.keys(sectionState);
+  if(secIds.length===0)return;
+
+  const el=document.getElementById(trackerId);
+  const header=el?el.querySelector('.tracker-header'):null;
+  if(header) header.innerHTML='<div class="spinner"></div><span>Researching — Round '+roundNum+'</span>';
+
+  let html='';
+
+  secIds.forEach(id=>{
+    const s=sectionState[id];
+    const isExpanded=(s.status==='searching'||s.status==='analyzing');
+    const cardCls='sec-card'+(s.status==='done'?' done':(s.status!=='waiting'?' active':''))+(isExpanded?' expanded':'');
+    const icon=s.status==='done'?'✅':s.status==='analyzing'?'🧠':s.status==='searching'?'🔍':'⬜';
+    const badgeCls=s.status==='done'?'badge-done':s.status==='analyzing'?'badge-analyzing':s.status==='searching'?'badge-searching':'badge-waiting';
+    const badgeText=s.status==='done'?(s.confidence*100|0)+'%':s.status;
+
+    html+='<div class="'+cardCls+'" onclick="toggleSec(this)">';
+    html+='<div class="sec-header"><span class="icon">'+icon+'</span><span class="title">'+s.title+'</span><span class="badge '+badgeCls+'">'+badgeText+'</span></div>';
+    html+='<div class="sec-body">';
+
+    (s.queries||[]).forEach(q=>{
+      html+='<div class="search-q">'+escHtml(q)+'</div>';
+      const urls=s.urls[q]||[];
+      urls.forEach(u=>{
+        html+='<div class="url-item"><span class="domain">'+escHtml(u.domain)+'</span><span class="sep">—</span><span class="title-text">'+escHtml(u.title||'')+'</span></div>';
+      });
+    });
+
+    s.docs.forEach(d=>{html+='<div class="doc-item">📄 '+escHtml(d)+'</div>'});
+
+    if(s.status==='done'){
+      html+='<div class="sec-meta">'+icon+' '+(s.confidence*100|0)+'% confidence · '+(s.content_size/1024).toFixed(1)+'KB written</div>';
+    }
+
+    html+='</div></div>';
+  });
+
+  const vfsPaths=Object.keys(vfsState);
+  if(vfsPaths.length>0){
+    html+='<div class="vfs-panel"><div class="vfs-header">📁 Virtual Filesystem</div>';
+    vfsPaths.forEach(p=>{
+      const v=vfsState[p];
+      html+='<div class="vfs-row"><span class="vfs-path">'+escHtml(p)+'</span><span class="vfs-size">'+(v.size/1024).toFixed(1)+'KB</span><span class="vfs-status">✅</span></div>';
+    });
+    html+='</div>';
+  }
+
+  html+='<div class="tracker-footer"><span>Round '+roundNum+'/3</span><span>'+completedSections+' of '+totalSections+' sections</span></div>';
+
+  sectionsEl.innerHTML=html;
+  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+}
+
+function finishTracker(){
+  const el=document.getElementById(trackerId);
+  if(el){
+    const header=el.querySelector('.tracker-header');
+    if(header) header.innerHTML='<span style="color:var(--green)">✅ Research complete</span>';
+    const footer=el.querySelector('.tracker-footer');
+    if(footer) footer.innerHTML='<span>Done</span><span>'+completedSections+' sections · '+Object.keys(vfsState).length+' files</span>';
+  }
+  trackerId=null;
+}
+
+function toggleSec(card){card.classList.toggle('expanded')}
+
+// ── Simple progress ──
+function addSimpleProgress(text){
+  ensureTracker();
+  const body=document.getElementById(trackerId+'-simple');if(!body)return;
+  const step=document.createElement('div');
+  step.style.cssText='font-size:12px;padding:3px 16px;color:var(--text2);animation:fadeIn .3s';
+  step.textContent=text;
+  body.appendChild(step);
+  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+}
+
+// ── UI Builders ──
+function addBubble(role,content,type){
+  const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg '+role;
+  if(type==='research_report'){div.innerHTML='<div class="msg-role">Research Report</div><div class="report-wrap">'+md(content)+'</div>'}
+  else{div.innerHTML='<div class="msg-role">'+role+'</div><div class="bubble">'+md(content)+'</div>'}
+  container.appendChild(div);container.scrollTop=container.scrollHeight;
+}
+function showPlan(plan,todos){
+  updateTodos(todos);const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg assistant';
+  let html='<div class="msg-role">Research Plan</div><div class="plan-card"><h4>'+(plan.summary||'Research Plan')+'</h4>';
+  html+='<div class="plan-meta">~'+(plan.estimated_time_seconds||90)+'s estimated · '+(plan.sections||[]).length+' sections</div>';
+  (plan.sections||[]).forEach((s,i)=>{html+='<div class="plan-section"><strong>'+(i+1)+'. '+s.title+'</strong>';if(s.description)html+='<div class="desc">'+s.description+'</div>';if(s.search_queries)html+='<div class="queries">'+s.search_queries.join(' · ')+'</div>';html+='</div>'});
+  html+='<div class="plan-actions"><button class="btn-approve" id="approveBtn" onclick="approvePlan()">✅ Approve & Start</button>';
+  html+='<button class="btn-cancel" id="cancelBtn" onclick="cancelPlan()">✗ Cancel</button></div></div>';
+  div.innerHTML=html;container.appendChild(div);container.scrollTop=container.scrollHeight;
+}
+function approvePlan(){
+  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'approve'}));
+}
+function cancelPlan(){
+  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'cancel'}));
+  document.getElementById('sendBtn').disabled=false;
+}
+function updateTodos(todos){
+  if(!todos)return;const el=document.getElementById('todoList');el.innerHTML='';
+  todos.forEach(t=>{const d=document.createElement('div');const cls=t.status==='done'?'todo-done':t.status==='in_progress'?'todo-progress':'todo-pending';const icon=t.status==='done'?'✅':t.status==='in_progress'?'🔄':'⬜';d.className='todo-item '+cls;d.textContent=icon+' '+t.task;el.appendChild(d)});
+}
+function escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+function md(text){
+  if(!text)return '';
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style="background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:12px;margin:8px 0"><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g,'<code style="background:var(--bg);padding:2px 5px;border-radius:3px;font-size:12px">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/^---$/gm,'<hr>').replace(/^\- (.+)$/gm,'<li>$1</li>').replace(/^\* (.+)$/gm,'<li>$1</li>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
+    .replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');
+}
+loadChats();
+</script>
+</body>
+</html>
