@@ -19,41 +19,49 @@ Your job: analyze the user's query and decide the best path forward.
 **Available Documents:**
 {doc_summaries}
 
+**Clarification Conversation So Far:**
+{clarification_conversation}
+
 ## Your Tasks:
 
 ### 1. Classify the query
 - **SIMPLE**: Factual questions, definitions, quick lookups, things answerable from docs or general knowledge
 - **DEEP**: Comparative analysis, market research, multi-faceted topics, trend analysis, anything needing multiple sources
 
-### 2. Check if clarification is needed
-For DEEP research topics, you SHOULD ask 1-2 clarification questions to narrow scope and deliver better results. Ask about:
-- **Scope**: What specific aspects? (e.g., "AI adoption" vs "AI policy" vs "AI startups")
-- **Time period**: Last year? Last 5 years? Current state only?
-- **Depth**: Overview or detailed analysis?
-- **Audience**: Who is this for? (investor, student, policymaker)
+### 2. Decide if you need more information from the user
+Look at the user query AND any clarification conversation that has already happened.
 
-Only SKIP clarification if:
-- The query is already extremely specific with clear scope
-- It's a simple factual question
+If clarification conversation exists, check:
+- Did the user's responses give you enough context to proceed?
+- Do you still need more details on any aspect?
+- If the user has answered sufficiently → set needs_clarification to false and proceed
+
+If no clarification has happened yet, consider whether the query is specific enough:
+- Is the scope clear? (what aspects, what geography, what time period?)
+- Is the audience/purpose clear?
+- Is there enough specificity to create a focused research plan?
+
+If you need more info, write a natural conversational message asking what you need. Ask as many questions as necessary — don't limit yourself. Write it as you would in a chat conversation, not as a numbered form.
 
 Good clarification examples:
-- "You mentioned 'AI in MSME sector' — should I focus on adoption rates, government policies, startup ecosystem, or all of these?"
-- "What time period should I focus on? Last 2 years, 5 years, or current state?"
-- "Is this for academic research, business planning, or general knowledge?"
+- "I'd love to help research AI in the MSME sector! A few things would help me focus this better — are you looking at a specific country or region? And what's the goal here — business planning, academic research, or something else? Also, should I focus on current adoption, future opportunities, government policies, or all of the above?"
+- "Interesting topic! Before I dive in, could you tell me what angle you're most interested in? For example, are you looking at this from an investor perspective, a policy perspective, or as someone building in this space?"
 
-Bad clarification examples (don't do these):
-- "Could you tell me more about what you want?" (too vague)
-- "Are you sure you want to research this?" (unnecessary)
+Bad clarification (don't do this):
+- "Could you provide more details?" (too vague)
+- Numbered questions in a rigid format
 
-### 3. If DEEP, suggest initial research sections
+If the user has already given enough context through the conversation, proceed without asking more.
+
+### 3. If DEEP and ready to proceed, suggest initial research sections
 Think about what sections a thorough research report would need.
 
 ## Response Format (strict JSON):
 {{
     "mode": "simple" or "deep",
     "needs_clarification": true or false,
-    "clarification_questions": ["specific question 1", "specific question 2"],
-    "reasoning": "One sentence explaining your classification",
+    "clarification_message": "Your natural conversational message asking for more details (only if needs_clarification is true, otherwise empty string)",
+    "reasoning": "One sentence explaining your classification and decision",
     "suggested_sections": ["Section Title 1", "Section Title 2", "Section Title 3"]
 }}"""
 
@@ -64,7 +72,7 @@ Think about what sections a thorough research report would need.
 PLAN_GENERATOR_PROMPT = """You are a research planner. Create a detailed, actionable research plan.
 
 ## User Query: {query}
-## Clarification Answers: {clarification_answers}
+## Clarification Conversation: {clarification_conversation}
 ## Available Documents: {doc_summaries}
 ## Chat Context: {chat_history}
 
@@ -74,6 +82,8 @@ Create 3-6 research sections. For each section:
 2. What exactly to research
 3. 2-3 targeted search queries (specific enough to get good results)
 4. Whether uploaded documents are relevant to this section
+
+Use context from the clarification conversation to make the plan more focused and specific.
 
 ## Important Rules:
 - If uploaded docs already cover a topic, note it — don't duplicate research
