@@ -7,8 +7,17 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0c0c12;--bg2:#13131d;--bg3:#1a1a28;--bg4:#21212f;--border:#222235;--text:#d4d4e0;--text2:#8888a0;--text3:#555568;--accent:#7c6cf7;--accent2:#9d8fff;--green:#34d399;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;--cyan:#22d3ee;--mono:'JetBrains Mono',monospace}
+:root{
+  --bg:#0c0c12;--bg2:#13131d;--bg3:#1a1a28;--bg4:#21212f;
+  --border:#222235;--text:#d4d4e0;--text2:#8888a0;--text3:#555568;
+  --accent:#7c6cf7;--accent2:#9d8fff;
+  --green:#34d399;--red:#f87171;--yellow:#fbbf24;
+  --blue:#60a5fa;--cyan:#22d3ee;--purple:#c084fc;--orange:#fb923c;
+  --mono:'JetBrains Mono',monospace
+}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden}
+
+/* ── Sidebar ── */
 .sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .sidebar-brand{padding:18px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px;color:var(--accent2);letter-spacing:-.3px}
 .new-chat-btn{margin:10px;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font:600 13px 'DM Sans';transition:background .2s}
@@ -20,6 +29,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .progress-section-title{font-size:11px;font-weight:600;color:var(--accent);padding:10px 12px 4px;text-transform:uppercase;letter-spacing:.5px}
 .todo-item{font-size:11.5px;padding:3px 12px;line-height:1.6}
 .todo-done{color:var(--green)}.todo-pending{color:var(--text2)}.todo-progress{color:var(--yellow)}
+
+/* ── Main ── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .chat-header{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .chat-header h2{font-size:15px;font-weight:600}
@@ -39,16 +50,49 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .msg-role{font-size:10px;color:var(--text2);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:.4px}
 .msg.user .msg-role{text-align:right}
 
-/* Research Tracker */
+/* ── Pipeline Tracker (new nodes + research) ── */
 .tracker{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin:12px 0;overflow:hidden}
 .tracker-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg3)}
-.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 .tracker-header span{font-size:13px;font-weight:600;color:var(--accent2)}
 .tracker-body{padding:8px 0}
 .tracker-footer{padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between}
 
-/* Section card */
+/* ── Pipeline stages (briefing + thinking) ── */
+.pipeline-stages{padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.stage-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;border:1px solid transparent;font-size:12px;transition:all .3s}
+.stage-row.active{background:var(--bg3);border-color:var(--border)}
+.stage-row.done{opacity:.7}
+.stage-icon{width:18px;text-align:center;flex-shrink:0}
+.stage-label{flex:1;font-weight:500}
+.stage-detail{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.stage-spinner{width:12px;height:12px;border:1.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+
+/* ── Thinking card (shown after extended_thinking completes) ── */
+.thinking-card{margin:4px 12px 8px;border-radius:8px;border:1px solid var(--purple);overflow:hidden;background:#1a1028}
+.thinking-card-header{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#1d122e;cursor:pointer;font-size:12px;font-weight:600;color:var(--purple)}
+.thinking-card-body{padding:10px 14px;display:none;font-size:12px;line-height:1.7}
+.thinking-card.expanded .thinking-card-body{display:block}
+.thinking-field{margin-bottom:8px}
+.thinking-field-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.thinking-field-value{color:var(--text);font-size:12px}
+.type-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
+.type-reasoning{background:#1e2a4a;color:var(--blue)}
+.type-research{background:#1a2a1a;color:var(--green)}
+.type-corpus{background:#2a1e1a;color:var(--orange)}
+.type-hybrid{background:#2a1a2a;color:var(--purple)}
+
+/* ── Context brief card ── */
+.brief-card{margin:4px 12px 4px;border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.brief-card-header{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--bg3);cursor:pointer;font-size:11px;font-weight:600;color:var(--text2)}
+.brief-card-body{padding:8px 14px;display:none;font-size:11.5px;line-height:1.7}
+.brief-card.expanded .brief-card-body{display:block}
+.brief-row{margin-bottom:5px}
+.brief-label{color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+.brief-value{color:var(--text2)}
+
+/* ── Section card (research) ── */
 .sec-card{margin:4px 12px;border-radius:8px;border:1px solid var(--border);overflow:hidden;transition:border-color .3s}
 .sec-card.active{border-color:var(--accent)}
 .sec-card.done{border-color:var(--green)}
@@ -62,8 +106,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .badge-waiting{background:#33334430;color:var(--text3)}
 .sec-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
 .sec-card.expanded .sec-body{max-height:500px;padding:8px 12px;overflow-y:auto}
-
-/* Search items inside section */
 .search-q{font-size:11px;color:var(--text2);margin:4px 0 2px;font-family:var(--mono)}
 .search-q::before{content:'→ ';color:var(--accent)}
 .url-item{font-size:11px;padding:1px 0 1px 16px;color:var(--text3);display:flex;gap:4px;animation:fadeIn .2s}
@@ -73,7 +115,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .doc-item{font-size:11px;padding:2px 0 2px 16px;color:var(--yellow)}
 .sec-meta{font-size:11px;color:var(--green);padding:4px 0;margin-top:4px;border-top:1px solid var(--border)}
 
-/* VFS panel */
+/* ── VFS panel ── */
 .vfs-panel{margin:8px 12px;border-radius:8px;border:1px solid var(--border);overflow:hidden}
 .vfs-header{padding:6px 12px;background:var(--bg3);font-size:11px;font-weight:600;color:var(--text2)}
 .vfs-row{display:flex;padding:3px 12px;font-size:11px;font-family:var(--mono);gap:8px;border-top:1px solid #1a1a25}
@@ -81,7 +123,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .vfs-size{color:var(--text2);width:50px;text-align:right}
 .vfs-status{width:20px;text-align:center}
 
-/* Plan card */
+/* ── Plan card ── */
 .plan-card{background:var(--bg2);border:1px solid var(--accent);border-radius:12px;padding:18px;margin:12px 0}
 .plan-card h4{color:var(--accent2);margin-bottom:6px;font-size:14px}
 .plan-meta{font-size:11px;color:var(--text2);margin-bottom:10px}
@@ -97,6 +139,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .btn-approve:hover:not(:disabled){background:#4ade80}
 .btn-cancel{background:var(--red);color:#fff}
 .btn-cancel:hover:not(:disabled){background:#fb9090}
+
+/* ── Report ── */
 .report-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;margin:12px 0}
 .report-wrap h1{font-size:18px;color:var(--accent2);margin:14px 0 8px}
 .report-wrap h2{font-size:15px;color:var(--accent2);margin:12px 0 6px}
@@ -106,13 +150,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .report-wrap a:hover{text-decoration:underline}
 .report-wrap hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .report-wrap li{font-size:13px;line-height:1.6}
+.report-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.report-tag{font-size:10px;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-weight:600}
+
+/* ── Input ── */
 .input-area{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px}
 .input-area input{flex:1;padding:11px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font:13.5px 'DM Sans';outline:none}
 .input-area input:focus{border-color:var(--accent)}
 .input-area button{padding:11px 22px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font:600 13px 'DM Sans';transition:background .15s}
 .input-area button:hover:not(:disabled){background:var(--accent2)}
 .input-area button:disabled{background:#333;cursor:not-allowed}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:3px}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:3px}
 </style>
 </head>
 <body>
@@ -125,6 +176,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div id="todoList"></div>
   </div>
 </div>
+
 <div class="main">
   <div class="chat-header">
     <h2 id="chatTitle">New Chat</h2>
@@ -141,151 +193,417 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 </div>
 
 <script>
-const API='';
-let chatId=null,deepMode=false,researchId=null,ws=null;
-let waitingForClarification=false; // track if we're in clarification chat mode
+const API = '';
+let chatId = null, deepMode = false, researchId = null, ws = null;
+let waitingForClarification = false;
 
 // ── Tracker state ──
-let trackerId=null;
-let sectionState={};
-let vfsState={};
-let roundNum=0, completedSections=0, totalSections=0;
+let trackerId = null;
+let sectionState = {};
+let vfsState = {};
+let roundNum = 0, completedSections = 0, totalSections = 0;
+
+// ── Pipeline stage state (new nodes) ──
+let pipelineStages = {};    // stage_key → {label, icon, status: 'waiting'|'active'|'done', detail}
+let thinkingData = null;    // result from thinking_complete event
+let briefData = null;       // context_brief from thinking_complete
 
 // ── Chat management ──
-async function loadChats(){const r=await fetch(API+'/api/v1/chats');const d=await r.json();const el=document.getElementById('chatList');el.innerHTML='';d.chats.forEach(c=>{const div=document.createElement('div');div.className='chat-item'+(c.chat_id===chatId?' active':'');div.textContent=c.title||'Untitled';div.onclick=()=>loadChat(c.chat_id);el.appendChild(div)})}
-async function newChat(){const r=await fetch(API+'/api/v1/chats',{method:'POST'});const d=await r.json();chatId=d.chat_id;document.getElementById('messages').innerHTML='';document.getElementById('chatTitle').textContent='New Chat';waitingForClarification=false;loadChats()}
-async function loadChat(id){chatId=id;const r=await fetch(API+'/api/v1/chats/'+id+'/messages');const d=await r.json();const el=document.getElementById('messages');el.innerHTML='';d.messages.forEach(m=>addBubble(m.role,m.content,m.type));el.scrollTop=el.scrollHeight;waitingForClarification=false;loadChats()}
-function toggleDeep(){deepMode=!deepMode;document.getElementById('deepToggle').classList.toggle('on',deepMode)}
+async function loadChats() {
+  const r = await fetch(API + '/api/v1/chats');
+  const d = await r.json();
+  const el = document.getElementById('chatList');
+  el.innerHTML = '';
+  d.chats.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'chat-item' + (c.chat_id === chatId ? ' active' : '');
+    div.textContent = c.title || 'Untitled';
+    div.onclick = () => loadChat(c.chat_id);
+    el.appendChild(div);
+  });
+}
 
-async function sendMessage(){
-  const inp=document.getElementById('userInput');
-  const msg=inp.value.trim();
-  if(!msg)return;
-  inp.value='';
+async function newChat() {
+  const r = await fetch(API + '/api/v1/chats', { method: 'POST' });
+  const d = await r.json();
+  chatId = d.chat_id;
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('chatTitle').textContent = 'New Chat';
+  waitingForClarification = false;
+  loadChats();
+}
 
-  // If waiting for clarification, send as clarification reply
-  if(waitingForClarification && ws && ws.readyState===1){
+async function loadChat(id) {
+  chatId = id;
+  const r = await fetch(API + '/api/v1/chats/' + id + '/messages');
+  const d = await r.json();
+  const el = document.getElementById('messages');
+  el.innerHTML = '';
+  d.messages.forEach(m => addBubble(m.role, m.content, m.type));
+  el.scrollTop = el.scrollHeight;
+  waitingForClarification = false;
+  loadChats();
+}
+
+function toggleDeep() {
+  deepMode = !deepMode;
+  document.getElementById('deepToggle').classList.toggle('on', deepMode);
+}
+
+async function sendMessage() {
+  const inp = document.getElementById('userInput');
+  const msg = inp.value.trim();
+  if (!msg) return;
+
+  // Disable immediately — before any await — to prevent double-submit on fast Enter/click
+  const btn = document.getElementById('sendBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  inp.value = '';
+
+  if (waitingForClarification && ws && ws.readyState === 1) {
     addBubble('user', msg);
-    ws.send(JSON.stringify({type:'clarify', message: msg}));
-    waitingForClarification=false;
-    document.getElementById('sendBtn').disabled=true;
-    document.getElementById('userInput').placeholder='Analyzing your response...';
+    ws.send(JSON.stringify({ type: 'clarify', message: msg }));
+    waitingForClarification = false;
+    inp.placeholder = 'Analyzing your response...';
     return;
   }
 
-  addBubble('user',msg);
-  if(!chatId){const r=await fetch(API+'/api/v1/chats',{method:'POST'});chatId=(await r.json()).chat_id}
-  deepMode?startDeepResearch(msg):normalChat(msg);
+  addBubble('user', msg);
+  if (!chatId) {
+    const r = await fetch(API + '/api/v1/chats', { method: 'POST' });
+    chatId = (await r.json()).chat_id;
+  }
+  deepMode ? startDeepResearch(msg) : normalChat(msg);
 }
 
-async function normalChat(msg){document.getElementById('sendBtn').disabled=true;try{const r=await fetch(API+'/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,chat_id:chatId})});const d=await r.json();chatId=d.chat_id;addBubble('assistant',d.reply);loadChats()}catch(e){addBubble('assistant','Error: '+e.message)}document.getElementById('sendBtn').disabled=false}
+async function normalChat(msg) {
+  document.getElementById('sendBtn').disabled = true;
+  try {
+    const r = await fetch(API + '/api/v1/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, chat_id: chatId })
+    });
+    const d = await r.json();
+    chatId = d.chat_id;
+    addBubble('assistant', d.reply);
+    loadChats();
+  } catch (e) {
+    addBubble('assistant', 'Error: ' + e.message);
+  }
+  document.getElementById('sendBtn').disabled = false;
+}
 
 // ── Deep Research ──
-async function startDeepResearch(query){
-  document.getElementById('sendBtn').disabled=true;
-  document.getElementById('progressPanel').style.display='block';
-  document.getElementById('todoList').innerHTML='';
-  sectionState={};vfsState={};roundNum=0;completedSections=0;totalSections=0;trackerId=null;
-  waitingForClarification=false;
-  try{
-    const r=await fetch(API+'/api/v1/deep-research/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,chat_id:chatId})});
-    const d=await r.json();researchId=d.research_id;chatId=d.chat_id;
-    ws=new WebSocket('ws://'+location.host+d.ws_url);
-    ws.onmessage=e=>handleWS(JSON.parse(e.data));
-    ws.onerror=()=>{addBubble('assistant','WebSocket error');document.getElementById('sendBtn').disabled=false};
-    ws.onclose=()=>{document.getElementById('sendBtn').disabled=false};
-  }catch(e){addBubble('assistant','Error: '+e.message);document.getElementById('sendBtn').disabled=false}
-}
+async function startDeepResearch(query) {
+  document.getElementById('progressPanel').style.display = 'block';
+  document.getElementById('todoList').innerHTML = '';
 
-function handleWS(msg){
-  switch(msg.type){
-    case 'progress': addSimpleProgress(msg.message); break;
-    case 'research_event': handleResearchEvent(msg); break;
-    case 'clarification_needed':
-      // Show as a normal chat bubble from the assistant
-      addBubble('assistant', msg.message);
-      // Enable input for user to reply naturally
-      waitingForClarification=true;
-      document.getElementById('sendBtn').disabled=false;
-      document.getElementById('userInput').placeholder='Reply to continue...';
-      document.getElementById('userInput').focus();
-      break;
-    case 'plan_ready': showPlan(msg.plan,msg.todos); break;
-    case 'report_complete':
-      finishTracker();
-      addBubble('assistant',msg.report,'research_report');
-      updateTodos(msg.todos);
-      document.getElementById('sendBtn').disabled=false;
-      document.getElementById('userInput').placeholder='Type a message...';
-      loadChats(); break;
-    case 'cancelled':
-      finishTracker();
-      addBubble('assistant','Research cancelled.');
-      document.getElementById('sendBtn').disabled=false;
-      document.getElementById('userInput').placeholder='Type a message...';
-      break;
-    case 'error':
-      finishTracker();
-      addBubble('assistant','Error: '+msg.message);
-      document.getElementById('sendBtn').disabled=false;
-      document.getElementById('userInput').placeholder='Type a message...';
-      break;
-    case 'heartbeat': break;
+  // Close any existing WS — prevents old connection from still firing handleWS
+  if (ws) { ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); ws = null; }
+
+  // Reset all state
+  sectionState = {}; vfsState = {}; roundNum = 0;
+  completedSections = 0; totalSections = 0; trackerId = null;
+  pipelineStages = {}; thinkingData = null; briefData = null;
+  waitingForClarification = false;
+
+  try {
+    const r = await fetch(API + '/api/v1/deep-research/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, chat_id: chatId })
+    });
+    const d = await r.json();
+    researchId = d.research_id;
+    chatId = d.chat_id;
+
+    ws = new WebSocket('ws://' + location.host + d.ws_url);
+    ws.onmessage = e => handleWS(JSON.parse(e.data));
+    ws.onerror = () => {
+      addBubble('assistant', 'WebSocket error');
+      document.getElementById('sendBtn').disabled = false;
+    };
+    ws.onclose = () => { document.getElementById('sendBtn').disabled = false; };
+  } catch (e) {
+    addBubble('assistant', 'Error: ' + e.message);
+    document.getElementById('sendBtn').disabled = false;
   }
 }
 
-// ── Research event handler (structured events from sub-agents) ──
-function handleResearchEvent(e){
+// ── Main WS dispatcher ──
+function handleWS(msg) {
+  switch (msg.type) {
+    case 'progress':
+      addSimpleProgress(msg.message);
+      break;
+
+    case 'pipeline_stage':
+      // briefing or thinking node just started
+      handlePipelineStage(msg);
+      break;
+
+    case 'thinking_complete':
+      // thinking node finished — show hypothesis card
+      handleThinkingComplete(msg);
+      break;
+
+    case 'research_event':
+      handleResearchEvent(msg);
+      break;
+
+    case 'clarification_needed':
+      addBubble('assistant', msg.message);
+      waitingForClarification = true;
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('userInput').placeholder = 'Reply to continue...';
+      document.getElementById('userInput').focus();
+      break;
+
+    case 'plan_ready':
+      showPlan(msg.plan, msg.todos);
+      break;
+
+    case 'report_complete':
+      finishTracker();
+      addReportBubble(msg.report, msg.metadata);
+      updateTodos(msg.todos);
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('userInput').placeholder = 'Type a message...';
+      loadChats();
+      break;
+
+    case 'cancelled':
+      finishTracker();
+      addBubble('assistant', 'Research cancelled.');
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('userInput').placeholder = 'Type a message...';
+      break;
+
+    case 'error':
+      finishTracker();
+      addBubble('assistant', 'Error: ' + msg.message);
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('userInput').placeholder = 'Type a message...';
+      break;
+
+    case 'heartbeat':
+      break;
+  }
+}
+
+// ── Pipeline stage events (briefing, thinking) ──
+function handlePipelineStage(msg) {
   ensureTracker();
-  switch(e.event){
+
+  const stageConfig = {
+    briefing: { label: 'Context Brief',     icon: '📋', color: 'var(--blue)' },
+    thinking: { label: 'Extended Thinking', icon: '🧠', color: 'var(--purple)' },
+  };
+
+  const cfg = stageConfig[msg.stage] || { label: msg.stage, icon: '⚙️', color: 'var(--text2)' };
+
+  // Mark previous stages done
+  Object.keys(pipelineStages).forEach(k => {
+    if (pipelineStages[k].status === 'active') {
+      pipelineStages[k].status = 'done';
+    }
+  });
+
+  pipelineStages[msg.stage] = {
+    ...cfg,
+    status: 'active',
+    detail: msg.message || '',
+  };
+
+  renderPipelineStages();
+}
+
+function handleThinkingComplete(msg) {
+  thinkingData = msg;
+  briefData = msg.context_brief || {};
+
+  // Mark thinking stage done
+  if (pipelineStages['thinking']) {
+    pipelineStages['thinking'].status = 'done';
+  }
+  if (pipelineStages['briefing']) {
+    pipelineStages['briefing'].status = 'done';
+  }
+
+  renderPipelineStages();
+  renderThinkingCard();
+}
+
+function renderPipelineStages() {
+  const trackerEl = document.getElementById(trackerId);
+  if (!trackerEl) return;
+
+  let stagesEl = document.getElementById(trackerId + '-pipeline');
+  if (!stagesEl) {
+    stagesEl = document.createElement('div');
+    stagesEl.id = trackerId + '-pipeline';
+    stagesEl.className = 'pipeline-stages';
+    // Insert after simple-progress, before sections
+    const body = trackerEl.querySelector('.tracker-body');
+    if (body) body.appendChild(stagesEl);
+  }
+
+  const stages = Object.entries(pipelineStages);
+  if (stages.length === 0) return;
+
+  stagesEl.innerHTML = stages.map(([key, s]) => {
+    const iconHtml = s.status === 'active'
+      ? `<div class="stage-spinner"></div>`
+      : `<span class="stage-icon">${s.status === 'done' ? '✅' : s.icon}</span>`;
+
+    return `<div class="stage-row ${s.status}" style="${s.status === 'active' ? `border-color:${s.color}20;background:${s.color}08` : ''}">
+      ${iconHtml}
+      <span class="stage-label" style="color:${s.status === 'done' ? 'var(--text2)' : s.color}">${s.label}</span>
+      ${s.detail ? `<span class="stage-detail">${escHtml(s.detail)}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderThinkingCard() {
+  if (!thinkingData) return;
+  const trackerEl = document.getElementById(trackerId);
+  if (!trackerEl) return;
+
+  // Remove old thinking card if exists
+  const old = document.getElementById(trackerId + '-thinking');
+  if (old) old.remove();
+
+  const typeColors = {
+    reasoning: 'type-reasoning',
+    research:  'type-research',
+    corpus:    'type-corpus',
+    hybrid:    'type-hybrid',
+  };
+  const typeBadge = typeColors[thinkingData.problem_type] || 'type-research';
+
+  // Build brief rows if we have brief data
+  let briefHtml = '';
+  if (briefData && Object.keys(briefData).length > 0) {
+    const rows = [
+      ['Intent',      briefData.user_intent],
+      ['Constraints', (briefData.implicit_constraints || []).join(', ') || 'None'],
+      ['Prior context', briefData.relevant_history],
+      ['Docs',        briefData.relevant_docs],
+    ].filter(([, v]) => v && v !== 'None' && v !== '');
+
+    if (rows.length > 0) {
+      briefHtml = `
+        <div class="brief-card" id="${trackerId}-brief">
+          <div class="brief-card-header" onclick="toggleBrief(this)">
+            📋 Context Brief <span style="margin-left:auto;opacity:.5">▾</span>
+          </div>
+          <div class="brief-card-body">
+            ${rows.map(([l, v]) => `
+              <div class="brief-row">
+                <div class="brief-label">${l}</div>
+                <div class="brief-value">${escHtml(v || '')}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+  }
+
+  const card = document.createElement('div');
+  card.id = trackerId + '-thinking';
+  card.innerHTML = `
+    ${briefHtml}
+    <div class="thinking-card" id="${trackerId}-thinking-card">
+      <div class="thinking-card-header" onclick="toggleThinking(this)">
+        🧠 Extended Thinking
+        <span class="type-badge ${typeBadge}" style="margin-left:8px">${thinkingData.problem_type || '?'}</span>
+        <span style="margin-left:auto;opacity:.5">▾</span>
+      </div>
+      <div class="thinking-card-body">
+        ${thinkingData.hypothesis ? `
+          <div class="thinking-field">
+            <div class="thinking-field-label">Hypothesis</div>
+            <div class="thinking-field-value">${escHtml(thinkingData.hypothesis)}</div>
+          </div>` : ''}
+        ${thinkingData.done_criteria ? `
+          <div class="thinking-field">
+            <div class="thinking-field-label">Done when</div>
+            <div class="thinking-field-value">${escHtml(thinkingData.done_criteria)}</div>
+          </div>` : ''}
+        ${thinkingData.thinking_summary ? `
+          <div class="thinking-field">
+            <div class="thinking-field-label">Summary</div>
+            <div class="thinking-field-value">${escHtml(thinkingData.thinking_summary)}</div>
+          </div>` : ''}
+      </div>
+    </div>`;
+
+  // Insert before sections div
+  const sectionsEl = document.getElementById(trackerId + '-sections');
+  if (sectionsEl) {
+    trackerEl.querySelector('.tracker-body').insertBefore(card, sectionsEl);
+  } else {
+    trackerEl.querySelector('.tracker-body').appendChild(card);
+  }
+}
+
+function toggleThinking(header) {
+  header.closest('.thinking-card').classList.toggle('expanded');
+}
+function toggleBrief(header) {
+  header.closest('.brief-card').classList.toggle('expanded');
+}
+
+// ── Research event handler ──
+function handleResearchEvent(e) {
+  ensureTracker();
+  switch (e.event) {
     case 'research_start':
-      totalSections=e.total;completedSections=0;roundNum++;
-      e.sections.forEach(s=>{
-        if(!sectionState[s.id]) sectionState[s.id]={title:s.title,status:'waiting',queries:s.queries||[],urls:{},docs:[],confidence:0,content_size:0};
-        else sectionState[s.id].status='waiting';
+      totalSections = e.total; completedSections = 0; roundNum++;
+      e.sections.forEach(s => {
+        if (!sectionState[s.id]) {
+          sectionState[s.id] = { title: s.title, status: 'waiting', queries: s.queries || [], urls: {}, docs: [], confidence: 0, content_size: 0 };
+        } else {
+          sectionState[s.id].status = 'waiting';
+        }
       });
       renderTracker(); break;
 
     case 'section_start':
-      if(sectionState[e.section_id]) sectionState[e.section_id].status='searching';
-      renderTracker(); break;
-
-    case 'search_start':
+      if (sectionState[e.section_id]) sectionState[e.section_id].status = 'searching';
       renderTracker(); break;
 
     case 'search_result':
-      if(sectionState[e.section_id]){
-        const s=sectionState[e.section_id];
-        if(!s.urls[e.query]) s.urls[e.query]=[];
-        s.urls[e.query].push({domain:e.domain,title:e.title,url:e.url});
+      if (sectionState[e.section_id]) {
+        const s = sectionState[e.section_id];
+        if (!s.urls[e.query]) s.urls[e.query] = [];
+        s.urls[e.query].push({ domain: e.domain, title: e.title, url: e.url });
       }
       renderTracker(); break;
 
-    case 'search_done':
-      renderTracker(); break;
-
     case 'docs_found':
-      if(sectionState[e.section_id]) sectionState[e.section_id].docs=e.filenames||[];
+      if (sectionState[e.section_id]) sectionState[e.section_id].docs = e.filenames || [];
       renderTracker(); break;
 
     case 'analyzing':
-      if(sectionState[e.section_id]) sectionState[e.section_id].status='analyzing';
+      if (sectionState[e.section_id]) sectionState[e.section_id].status = 'analyzing';
       renderTracker(); break;
 
     case 'section_done':
-      if(sectionState[e.section_id]){
-        const s=sectionState[e.section_id];
-        s.status='done'; s.confidence=e.confidence||0; s.content_size=e.content_size||0;
+      if (sectionState[e.section_id]) {
+        const s = sectionState[e.section_id];
+        s.status = 'done'; s.confidence = e.confidence || 0; s.content_size = e.content_size || 0;
         completedSections++;
       }
       renderTracker(); break;
 
     case 'vfs_write':
-      vfsState[e.path]={size:e.size||0,status:'done'};
+      vfsState[e.path] = { size: e.size || 0, status: 'done' };
       renderTracker(); break;
 
     case 'progress_update':
-      completedSections=e.completed;totalSections=e.total;
+      completedSections = e.completed; totalSections = e.total;
       renderTracker(); break;
 
     case 'research_round_done':
@@ -294,137 +612,221 @@ function handleResearchEvent(e){
 }
 
 // ── Tracker rendering ──
-function ensureTracker(){
-  if(trackerId && document.getElementById(trackerId)) return;
-  const id='tracker-'+Date.now(); trackerId=id;
-  const container=document.getElementById('messages');
-  const div=document.createElement('div');div.className='msg assistant';div.style.maxWidth='100%';
-  div.innerHTML='<div class="msg-role">Research Agent</div><div class="tracker" id="'+id+'"><div class="tracker-header"><div class="spinner"></div><span>Researching...</span></div><div class="tracker-body" id="'+id+'-simple"></div><div id="'+id+'-sections"></div></div>';
+function ensureTracker() {
+  if (trackerId && document.getElementById(trackerId)) return;
+  const id = 'tracker-' + Date.now();
+  trackerId = id;
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.style.maxWidth = '100%';
+  div.innerHTML = `
+    <div class="msg-role">Research Agent</div>
+    <div class="tracker" id="${id}">
+      <div class="tracker-header">
+        <div class="spinner"></div>
+        <span>Starting...</span>
+      </div>
+      <div class="tracker-body">
+        <div id="${id}-simple"></div>
+      </div>
+      <div id="${id}-sections"></div>
+    </div>`;
   container.appendChild(div);
-  container.scrollTop=container.scrollHeight;
+  container.scrollTop = container.scrollHeight;
 }
 
-function renderTracker(){
-  const sectionsEl=document.getElementById(trackerId+'-sections');if(!sectionsEl)return;
-  const secIds=Object.keys(sectionState);
-  if(secIds.length===0)return;
+function renderTracker() {
+  const sectionsEl = document.getElementById(trackerId + '-sections');
+  if (!sectionsEl) return;
+  const secIds = Object.keys(sectionState);
+  if (secIds.length === 0) return;
 
-  const el=document.getElementById(trackerId);
-  const header=el?el.querySelector('.tracker-header'):null;
-  if(header) header.innerHTML='<div class="spinner"></div><span>Researching — Round '+roundNum+'</span>';
+  const el = document.getElementById(trackerId);
+  const header = el ? el.querySelector('.tracker-header') : null;
+  if (header) header.innerHTML = `<div class="spinner"></div><span>Researching — Round ${roundNum}</span>`;
 
-  let html='';
+  let html = '';
+  secIds.forEach(id => {
+    const s = sectionState[id];
+    const isExpanded = (s.status === 'searching' || s.status === 'analyzing');
+    const cardCls = 'sec-card' + (s.status === 'done' ? ' done' : (s.status !== 'waiting' ? ' active' : '')) + (isExpanded ? ' expanded' : '');
+    const icon = s.status === 'done' ? '✅' : s.status === 'analyzing' ? '🧠' : s.status === 'searching' ? '🔍' : '⬜';
+    const badgeCls = s.status === 'done' ? 'badge-done' : s.status === 'analyzing' ? 'badge-analyzing' : s.status === 'searching' ? 'badge-searching' : 'badge-waiting';
+    const badgeText = s.status === 'done' ? (s.confidence * 100 | 0) + '%' : s.status;
 
-  secIds.forEach(id=>{
-    const s=sectionState[id];
-    const isExpanded=(s.status==='searching'||s.status==='analyzing');
-    const cardCls='sec-card'+(s.status==='done'?' done':(s.status!=='waiting'?' active':''))+(isExpanded?' expanded':'');
-    const icon=s.status==='done'?'✅':s.status==='analyzing'?'🧠':s.status==='searching'?'🔍':'⬜';
-    const badgeCls=s.status==='done'?'badge-done':s.status==='analyzing'?'badge-analyzing':s.status==='searching'?'badge-searching':'badge-waiting';
-    const badgeText=s.status==='done'?(s.confidence*100|0)+'%':s.status;
+    html += `<div class="${cardCls}" onclick="toggleSec(this)">
+      <div class="sec-header">
+        <span class="icon">${icon}</span>
+        <span class="title">${escHtml(s.title)}</span>
+        <span class="badge ${badgeCls}">${badgeText}</span>
+      </div>
+      <div class="sec-body">`;
 
-    html+='<div class="'+cardCls+'" onclick="toggleSec(this)">';
-    html+='<div class="sec-header"><span class="icon">'+icon+'</span><span class="title">'+s.title+'</span><span class="badge '+badgeCls+'">'+badgeText+'</span></div>';
-    html+='<div class="sec-body">';
-
-    (s.queries||[]).forEach(q=>{
-      html+='<div class="search-q">'+escHtml(q)+'</div>';
-      const urls=s.urls[q]||[];
-      urls.forEach(u=>{
-        html+='<div class="url-item"><span class="domain">'+escHtml(u.domain)+'</span><span class="sep">—</span><span class="title-text">'+escHtml(u.title||'')+'</span></div>';
+    (s.queries || []).forEach(q => {
+      html += `<div class="search-q">${escHtml(q)}</div>`;
+      (s.urls[q] || []).forEach(u => {
+        html += `<div class="url-item"><span class="domain">${escHtml(u.domain)}</span><span class="sep">—</span><span class="title-text">${escHtml(u.title || '')}</span></div>`;
       });
     });
-
-    s.docs.forEach(d=>{html+='<div class="doc-item">📄 '+escHtml(d)+'</div>'});
-
-    if(s.status==='done'){
-      html+='<div class="sec-meta">'+icon+' '+(s.confidence*100|0)+'% confidence · '+(s.content_size/1024).toFixed(1)+'KB written</div>';
+    s.docs.forEach(d => { html += `<div class="doc-item">📄 ${escHtml(d)}</div>`; });
+    if (s.status === 'done') {
+      html += `<div class="sec-meta">✅ ${(s.confidence * 100) | 0}% confidence · ${(s.content_size / 1024).toFixed(1)}KB written</div>`;
     }
-
-    html+='</div></div>';
+    html += `</div></div>`;
   });
 
-  const vfsPaths=Object.keys(vfsState);
-  if(vfsPaths.length>0){
-    html+='<div class="vfs-panel"><div class="vfs-header">📁 Virtual Filesystem</div>';
-    vfsPaths.forEach(p=>{
-      const v=vfsState[p];
-      html+='<div class="vfs-row"><span class="vfs-path">'+escHtml(p)+'</span><span class="vfs-size">'+(v.size/1024).toFixed(1)+'KB</span><span class="vfs-status">✅</span></div>';
+  const vfsPaths = Object.keys(vfsState);
+  if (vfsPaths.length > 0) {
+    html += `<div class="vfs-panel"><div class="vfs-header">📁 Virtual Filesystem</div>`;
+    vfsPaths.forEach(p => {
+      const v = vfsState[p];
+      html += `<div class="vfs-row"><span class="vfs-path">${escHtml(p)}</span><span class="vfs-size">${(v.size / 1024).toFixed(1)}KB</span><span class="vfs-status">✅</span></div>`;
     });
-    html+='</div>';
+    html += `</div>`;
   }
 
-  html+='<div class="tracker-footer"><span>Round '+roundNum+'/3</span><span>'+completedSections+' of '+totalSections+' sections</span></div>';
-
-  sectionsEl.innerHTML=html;
-  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+  html += `<div class="tracker-footer"><span>Round ${roundNum}/${3}</span><span>${completedSections} of ${totalSections} sections</span></div>`;
+  sectionsEl.innerHTML = html;
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
 
-function finishTracker(){
-  const el=document.getElementById(trackerId);
-  if(el){
-    const header=el.querySelector('.tracker-header');
-    if(header) header.innerHTML='<span style="color:var(--green)">✅ Research complete</span>';
-    const footer=el.querySelector('.tracker-footer');
-    if(footer) footer.innerHTML='<span>Done</span><span>'+completedSections+' sections · '+Object.keys(vfsState).length+' files</span>';
+function finishTracker() {
+  const el = document.getElementById(trackerId);
+  if (el) {
+    const header = el.querySelector('.tracker-header');
+    if (header) header.innerHTML = `<span style="color:var(--green)">✅ Research complete</span>`;
+    const footer = el.querySelector('.tracker-footer');
+    if (footer) footer.innerHTML = `<span>Done</span><span>${completedSections} sections · ${Object.keys(vfsState).length} files</span>`;
   }
-  trackerId=null;
+  trackerId = null;
 }
 
-function toggleSec(card){card.classList.toggle('expanded')}
+function toggleSec(card) { card.classList.toggle('expanded'); }
 
 // ── Simple progress ──
-function addSimpleProgress(text){
+function addSimpleProgress(text) {
   ensureTracker();
-  const body=document.getElementById(trackerId+'-simple');if(!body)return;
-  const step=document.createElement('div');
-  step.style.cssText='font-size:12px;padding:3px 16px;color:var(--text2);animation:fadeIn .3s';
-  step.textContent=text;
+  const body = document.getElementById(trackerId + '-simple');
+  if (!body) return;
+  const step = document.createElement('div');
+  step.style.cssText = 'font-size:12px;padding:3px 16px;color:var(--text2);animation:fadeIn .3s';
+  step.textContent = text;
   body.appendChild(step);
-  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
 
 // ── UI Builders ──
-function addBubble(role,content,type){
-  const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg '+role;
-  if(type==='research_report'){div.innerHTML='<div class="msg-role">Research Report</div><div class="report-wrap">'+md(content)+'</div>'}
-  else{div.innerHTML='<div class="msg-role">'+role+'</div><div class="bubble">'+md(content)+'</div>'}
-  container.appendChild(div);container.scrollTop=container.scrollHeight;
+function addBubble(role, content, type) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (type === 'research_report') {
+    div.innerHTML = `<div class="msg-role">Research Report</div><div class="report-wrap">${md(content)}</div>`;
+  } else {
+    div.innerHTML = `<div class="msg-role">${role}</div><div class="bubble">${md(content)}</div>`;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
-function showPlan(plan,todos){
-  updateTodos(todos);const container=document.getElementById('messages');const div=document.createElement('div');div.className='msg assistant';
-  let html='<div class="msg-role">Research Plan</div><div class="plan-card"><h4>'+(plan.summary||'Research Plan')+'</h4>';
-  html+='<div class="plan-meta">~'+(plan.estimated_time_seconds||90)+'s estimated · '+(plan.sections||[]).length+' sections</div>';
-  (plan.sections||[]).forEach((s,i)=>{html+='<div class="plan-section"><strong>'+(i+1)+'. '+s.title+'</strong>';if(s.description)html+='<div class="desc">'+s.description+'</div>';if(s.search_queries)html+='<div class="queries">'+s.search_queries.join(' · ')+'</div>';html+='</div>'});
-  html+='<div class="plan-actions"><button class="btn-approve" id="approveBtn" onclick="approvePlan()">✅ Approve & Start</button>';
-  html+='<button class="btn-cancel" id="cancelBtn" onclick="cancelPlan()">✗ Cancel</button></div></div>';
-  div.innerHTML=html;container.appendChild(div);container.scrollTop=container.scrollHeight;
+
+function addReportBubble(content, metadata) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.style.maxWidth = '100%';
+
+  // Build metadata tags
+  let metaTags = '';
+  if (metadata) {
+    const typeColors = { reasoning: '#1e3a5f', research: '#1a3a1a', corpus: '#3a1a0a', hybrid: '#2a1a3a' };
+    if (metadata.problem_type) {
+      metaTags += `<span class="report-tag" style="background:${typeColors[metadata.problem_type] || '#222'};color:var(--text2)">${metadata.problem_type}</span>`;
+    }
+    if (metadata.hypothesis) {
+      metaTags += `<span class="report-tag" style="background:#1a1a2e;color:var(--text2)" title="${escHtml(metadata.hypothesis)}">💡 hypothesis</span>`;
+    }
+  }
+
+  div.innerHTML = `
+    <div class="msg-role">Research Report</div>
+    <div class="report-wrap">
+      ${metaTags ? `<div class="report-meta">${metaTags}</div>` : ''}
+      ${md(content)}
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
-function approvePlan(){
-  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
-  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'approve'}));
+
+function showPlan(plan, todos) {
+  updateTodos(todos);
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  let html = `<div class="msg-role">Research Plan</div><div class="plan-card">
+    <h4>${plan.summary || 'Research Plan'}</h4>
+    <div class="plan-meta">~${plan.estimated_time_seconds || 90}s estimated · ${(plan.sections || []).length} sections</div>`;
+  (plan.sections || []).forEach((s, i) => {
+    html += `<div class="plan-section">
+      <strong>${i + 1}. ${escHtml(s.title)}</strong>
+      ${s.description ? `<div class="desc">${escHtml(s.description)}</div>` : ''}
+      ${s.search_queries ? `<div class="queries">${s.search_queries.map(q => escHtml(q)).join(' · ')}</div>` : ''}
+    </div>`;
+  });
+  html += `<div class="plan-actions">
+    <button class="btn-approve" id="approveBtn" onclick="approvePlan()">✅ Approve & Start</button>
+    <button class="btn-cancel" id="cancelBtn" onclick="cancelPlan()">✗ Cancel</button>
+  </div></div>`;
+  div.innerHTML = html;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
-function cancelPlan(){
-  const a=document.getElementById('approveBtn'),c=document.getElementById('cancelBtn');if(a)a.disabled=true;if(c)c.disabled=true;
-  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'confirm_plan',action:'cancel'}));
-  document.getElementById('sendBtn').disabled=false;
+
+function approvePlan() {
+  const a = document.getElementById('approveBtn'), c = document.getElementById('cancelBtn');
+  if (a) a.disabled = true; if (c) c.disabled = true;
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'confirm_plan', action: 'approve' }));
 }
-function updateTodos(todos){
-  if(!todos)return;const el=document.getElementById('todoList');el.innerHTML='';
-  todos.forEach(t=>{const d=document.createElement('div');const cls=t.status==='done'?'todo-done':t.status==='in_progress'?'todo-progress':'todo-pending';const icon=t.status==='done'?'✅':t.status==='in_progress'?'🔄':'⬜';d.className='todo-item '+cls;d.textContent=icon+' '+t.task;el.appendChild(d)});
+
+function cancelPlan() {
+  const a = document.getElementById('approveBtn'), c = document.getElementById('cancelBtn');
+  if (a) a.disabled = true; if (c) c.disabled = true;
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'confirm_plan', action: 'cancel' }));
+  document.getElementById('sendBtn').disabled = false;
 }
-function escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
-function md(text){
-  if(!text)return '';
-  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre style="background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:12px;margin:8px 0"><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g,'<code style="background:var(--bg);padding:2px 5px;border-radius:3px;font-size:12px">$1</code>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    .replace(/^---$/gm,'<hr>').replace(/^\- (.+)$/gm,'<li>$1</li>').replace(/^\* (.+)$/gm,'<li>$1</li>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
-    .replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');
+
+function updateTodos(todos) {
+  if (!todos) return;
+  const el = document.getElementById('todoList');
+  el.innerHTML = '';
+  todos.forEach(t => {
+    const d = document.createElement('div');
+    const cls = t.status === 'done' ? 'todo-done' : t.status === 'in_progress' ? 'todo-progress' : 'todo-pending';
+    const icon = t.status === 'done' ? '✅' : t.status === 'in_progress' ? '🔄' : '⬜';
+    d.className = 'todo-item ' + cls;
+    d.textContent = icon + ' ' + t.task;
+    el.appendChild(d);
+  });
 }
+
+function escHtml(s) {
+  return s ? s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+}
+
+function md(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre style="background:var(--bg);padding:10px;border-radius:6px;overflow-x:auto;font-size:12px;margin:8px 0"><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code style="background:var(--bg);padding:2px 5px;border-radius:3px;font-size:12px">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^\- (.+)$/gm, '<li>$1</li>').replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+}
+
 loadChats();
 </script>
 </body>

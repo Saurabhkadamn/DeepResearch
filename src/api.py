@@ -1,6 +1,19 @@
 """
 Deep Research - FastAPI API + WebSocket
 Normal chat mode + Deep research mode in one service.
+
+Pipeline stages streamed to frontend (in execution order):
+  collecting   → collect_context
+  analyzing    → analyze_query          ← runs FIRST
+  clarifying   → wait_for_clarification (HITL, optional)
+  briefing     → context_brief          ← after clarification
+  thinking     → extended_thinking      ← after briefing
+  planning     → generate_plan
+  awaiting_confirmation → wait_for_confirmation (HITL)
+  researching  → execute_research
+  synthesizing → synthesize_and_check
+  writing      → write_report
+  completed    → done
 """
 
 import json
@@ -27,7 +40,7 @@ from .tools.documents import get_all_docs
 
 
 # ============================================================
-# SESSION STORE (in-memory, replace with Redis in production)
+# SESSION STORE
 # ============================================================
 research_sessions: dict[str, dict] = {}
 ws_connections: dict[str, WebSocket] = {}
@@ -62,7 +75,7 @@ class PlanActionRequest(BaseModel):
     edits: dict = Field(default_factory=dict)
 
 class ClarifyRequest(BaseModel):
-    message: str  # Free-text chat message from user
+    message: str
 
 
 # ============================================================
@@ -76,7 +89,7 @@ async def lifespan(app: FastAPI):
     yield
     print("👋 Shutting down...")
 
-app = FastAPI(title="Deep Research API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Deep Research API", version="0.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,7 +99,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static HTML test page
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -99,7 +111,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "deep-research"}
+    return {"status": "ok", "service": "deep-research", "version": "0.3.0"}
 
 @app.get("/api/v1/chats")
 async def api_list_chats():
@@ -125,11 +137,10 @@ async def api_list_documents():
 
 
 # ============================================================
-# NORMAL CHAT (simple proxy to OpenRouter)
+# NORMAL CHAT
 # ============================================================
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def normal_chat(request: ChatRequest):
-    """Normal chat mode — simple LLM call with history context."""
     chat_id = request.chat_id
     if not chat_id:
         chat_id = create_chat(request.message[:50])
@@ -151,7 +162,6 @@ async def normal_chat(request: ChatRequest):
 # ============================================================
 @app.post("/api/v1/deep-research/start", response_model=StartResearchResponse)
 async def start_research(request: StartResearchRequest):
-    """Start a deep research session."""
     chat_id = request.chat_id
     if not chat_id:
         chat_id = create_chat(f"Research: {request.query[:40]}")
@@ -179,13 +189,13 @@ async def start_research(request: StartResearchRequest):
     return StartResearchResponse(
         research_id=research_id,
         chat_id=chat_id,
-        status="analyzing",
+        status="collecting",
         ws_url=f"/ws/deep-research/{research_id}",
     )
 
 
 # ============================================================
-# DEEP RESEARCH - CLARIFY (now chat-based)
+# DEEP RESEARCH - CLARIFY
 # ============================================================
 @app.post("/api/v1/deep-research/{research_id}/clarify")
 async def submit_clarification(research_id: str, request: ClarifyRequest):
@@ -193,8 +203,6 @@ async def submit_clarification(research_id: str, request: ClarifyRequest):
         raise HTTPException(404, "Session not found")
 
     session = research_sessions[research_id]
-
-    # Append user's chat message to the clarification conversation log
     conversation = session["state"].get("clarification_conversation", [])
     conversation.append({"role": "user", "content": request.message})
     session["state"]["clarification_conversation"] = conversation
@@ -224,7 +232,13 @@ async def confirm_plan(research_id: str, request: PlanActionRequest):
 
     session["state"]["plan_approved"] = True
     await _send_ws(research_id, {"type": "progress", "message": "✅ Plan approved"})
-    asyncio.create_task(_resume_graph(research_id))
+
+    # Only trigger resume via HTTP if there's no active WS connection.
+    # When WS is connected, the confirm_plan WS message handles resume.
+    # Avoids double-resume when both paths are active simultaneously.
+    if research_id not in ws_connections:
+        asyncio.create_task(_resume_graph(research_id))
+
     return {"status": "researching"}
 
 
@@ -238,9 +252,18 @@ async def research_status(research_id: str):
 
     state = research_sessions[research_id]["state"]
     progress_map = {
-        "analyzing": 10, "clarifying": 15, "planning": 20,
-        "awaiting_confirmation": 25, "researching": 50,
-        "synthesizing": 70, "writing": 85, "completed": 100,
+        "collecting":            5,
+        "analyzing":            15,
+        "analyzed":             22,   # analyze_query done, heading to brief
+        "clarifying":           20,
+        "briefing":             35,
+        "thinking":             50,
+        "planning":             60,
+        "awaiting_confirmation": 63,
+        "researching":          75,
+        "synthesizing":         87,
+        "writing":              93,
+        "completed":           100,
     }
 
     return {
@@ -249,6 +272,11 @@ async def research_status(research_id: str):
         "progress": progress_map.get(state.get("status", ""), 0),
         "progress_messages": state.get("progress", []),
         "todos": state.get("todos", []),
+        # Expose thinking output for polling clients too
+        "problem_type":    state.get("problem_type", ""),
+        "hypothesis":      state.get("hypothesis", ""),
+        "done_criteria":   state.get("done_criteria", ""),
+        "context_brief":   state.get("context_brief", {}),
     }
 
 
@@ -279,6 +307,9 @@ async def get_report(research_id: str):
         "metadata": {
             "research_loops": state.get("research_loop_count", 0),
             "model": state.get("model", "default"),
+            "problem_type": state.get("problem_type", ""),
+            "hypothesis": state.get("hypothesis", ""),
+            "done_criteria": state.get("done_criteria", ""),
         },
     }
 
@@ -298,7 +329,6 @@ async def ws_endpoint(websocket: WebSocket, research_id: str):
     ws_connections[research_id] = websocket
 
     try:
-        # Start the graph
         asyncio.create_task(_run_graph(research_id))
 
         while True:
@@ -309,12 +339,9 @@ async def ws_endpoint(websocket: WebSocket, research_id: str):
                 if msg_type == "clarify":
                     session = research_sessions[research_id]
                     user_message = data.get("message", "")
-
-                    # Append to clarification conversation
                     conversation = session["state"].get("clarification_conversation", [])
                     conversation.append({"role": "user", "content": user_message})
                     session["state"]["clarification_conversation"] = conversation
-
                     asyncio.create_task(_resume_graph(research_id))
 
                 elif msg_type == "confirm_plan":
@@ -342,67 +369,105 @@ async def ws_endpoint(websocket: WebSocket, research_id: str):
 # GRAPH EXECUTION
 # ============================================================
 async def _run_graph(research_id: str):
-    """Run the LangGraph from start."""
+    """Run the LangGraph from start. Guard against double-start."""
     session = research_sessions.get(research_id)
     if not session:
         return
 
+    # ── Guard: prevent double-start if WS reconnects ──────────────────
+    if session.get("graph_started"):
+        print(f"[GRAPH] Already running {research_id}, ignoring duplicate start")
+        return
+    session["graph_started"] = True
+
+    # ── Real-time progress callback (the ONLY delivery path) ──────────
+    # _stream_progress was removed — it double-sent every message because
+    # callbacks fire immediately AND _stream_progress re-sent from state.
     async def rt_progress(msg):
         if isinstance(msg, dict):
             await _send_ws(research_id, {"type": "research_event", **msg})
         else:
             await _send_ws(research_id, {"type": "progress", "message": msg})
+
     register_progress_callback(research_id, rt_progress)
 
-    graph = get_graph()
+    graph  = get_graph()
     config = session["config"]
-    prev_count = 0
 
     print(f"[GRAPH] Starting research {research_id}")
 
     try:
-        event_count = 0
+        event_count   = 0
+        thinking_sent = False
+        plan_sent     = False
+
         async for event in graph.astream(session["state"], config=config, stream_mode="values"):
             event_count += 1
             session["state"] = event
             status = event.get("status", "")
             print(f"[GRAPH] Event #{event_count}, status: {status}")
 
-            await _stream_progress(research_id, event, prev_count)
-            prev_count = len(event.get("progress", []))
+            # ── Pipeline stage announcements ───────────────────────────
+            if status == "briefing":
+                await _send_ws(research_id, {
+                    "type": "pipeline_stage",
+                    "stage": "briefing",
+                    "message": "📋 Building context brief...",
+                })
+            elif status == "thinking":
+                await _send_ws(research_id, {
+                    "type": "pipeline_stage",
+                    "stage": "thinking",
+                    "message": "🧠 Extended thinking in progress...",
+                })
+            elif status == "planning" and event.get("problem_type") and not thinking_sent:
+                thinking_sent = True
+                await _send_ws(research_id, {
+                    "type": "thinking_complete",
+                    "problem_type":     event.get("problem_type", ""),
+                    "hypothesis":       event.get("hypothesis", ""),
+                    "done_criteria":    event.get("done_criteria", ""),
+                    "thinking_summary": event.get("thinking_summary", ""),
+                    "context_brief":    event.get("context_brief", {}),
+                })
 
-            # HITL: clarification needed (now sends a chat message)
+            # ── HITL: clarification ────────────────────────────────────
             if status == "clarifying" and event.get("clarification_message"):
-                # Add the LLM's clarification message to the conversation log
                 conversation = event.get("clarification_conversation", [])
                 conversation.append({"role": "assistant", "content": event["clarification_message"]})
                 event["clarification_conversation"] = conversation
                 session["state"] = event
-
                 await _send_ws(research_id, {
                     "type": "clarification_needed",
                     "message": event["clarification_message"],
                 })
                 return
 
-            if status == "awaiting_confirmation" and event.get("plan"):
+            # ── HITL: plan confirmation (send once only) ───────────────
+            if status == "awaiting_confirmation" and event.get("plan") and not plan_sent:
+                plan_sent = True
                 await _send_ws(research_id, {
                     "type": "plan_ready",
-                    "plan": event["plan"],
+                    "plan":  event["plan"],
                     "todos": event.get("todos", []),
                 })
                 return
 
+            # ── Done ───────────────────────────────────────────────────
             if status == "completed":
                 chat_id = session.get("chat_id", "")
                 if chat_id:
                     add_message(chat_id, "assistant", event.get("report", ""), "research_report")
-
                 await _send_ws(research_id, {
                     "type": "report_complete",
-                    "report": event.get("report", ""),
-                    "sources": event.get("all_sources", []),
-                    "todos": event.get("todos", []),
+                    "report":   event.get("report", ""),
+                    "sources":  event.get("all_sources", []),
+                    "todos":    event.get("todos", []),
+                    "metadata": {
+                        "problem_type":  event.get("problem_type", ""),
+                        "hypothesis":    event.get("hypothesis", ""),
+                        "done_criteria": event.get("done_criteria", ""),
+                    },
                 })
                 return
 
@@ -417,97 +482,120 @@ async def _run_graph(research_id: str):
         import traceback
         traceback.print_exc()
         await _send_ws(research_id, {"type": "error", "message": str(e)})
+    finally:
+        unregister_progress_callback(research_id)
 
     print(f"[GRAPH] _run_graph ended for {research_id}")
 
 
 async def _resume_graph(research_id: str):
-    """Resume graph after HITL interrupt."""
+    """Resume graph after HITL interrupt. Guard against double-resume."""
     session = research_sessions.get(research_id)
     if not session:
         return
 
+    # ── Guard: prevent double-resume (double-click approve, race condition) ──
+    if session.get("resume_running"):
+        print(f"[RESUME] Already resuming {research_id}, ignoring duplicate")
+        return
+    session["resume_running"] = True
+
     async def rt_progress(msg):
-        mtype = msg.get("event", "?") if isinstance(msg, dict) else "text"
-        print(f"[RT_PROGRESS] type={mtype}, ws={research_id in ws_connections}")
         if isinstance(msg, dict):
             await _send_ws(research_id, {"type": "research_event", **msg})
         else:
             await _send_ws(research_id, {"type": "progress", "message": msg})
+
     register_progress_callback(research_id, rt_progress)
 
-    graph = get_graph()
-    config = session["config"]
-    current_state = session["state"]
+    graph               = get_graph()
+    config              = session["config"]
+    current_state       = session["state"]
     resuming_from_status = current_state.get("status", "")
 
-    print(f"[RESUME] Resuming {research_id}, status: {resuming_from_status}")
+    print(f"[RESUME] Resuming {research_id} from status: {resuming_from_status}")
 
-    # Determine which node produced the current state so LangGraph
-    # knows where to resume from. interrupt_before pauses BEFORE the
-    # target node, so the last executed node is the one before it.
-    # - "clarifying" status → last node was "analyze_query"
-    # - "awaiting_confirmation" status → last node was "generate_plan"
+    # interrupt_before=["wait_for_clarification", "wait_for_confirmation"]
+    # graph paused BEFORE those nodes → resume AS those nodes so execution
+    # continues from the next node after them.
     as_node = None
     if resuming_from_status == "clarifying":
-        as_node = "analyze_query"
+        as_node = "wait_for_clarification"
     elif resuming_from_status == "awaiting_confirmation":
-        as_node = "generate_plan"
+        as_node = "wait_for_confirmation"
 
     try:
         graph.update_state(config, current_state, as_node=as_node)
-        print(f"[RESUME] update_state OK, as_node={as_node}")
     except Exception as e:
         print(f"[RESUME] update_state error: {e}")
 
-    prev_count = len(current_state.get("progress", []))
-
-    # Track the previous clarification_message so we can detect NEW ones
-    # (vs replayed old ones from checkpoint)
     prev_clarification_msg = current_state.get("clarification_message", "")
 
     try:
-        event_count = 0
+        event_count   = 0
+        thinking_sent = bool(current_state.get("problem_type"))
+        plan_sent     = False
+
         async for event in graph.astream(None, config=config, stream_mode="values"):
             event_count += 1
             session["state"] = event
             status = event.get("status", "")
             print(f"[RESUME] Event #{event_count}, status: {status}")
 
-            await _stream_progress(research_id, event, prev_count)
-            prev_count = len(event.get("progress", []))
-
-            # Skip stale checkpoint replays (first event often replays old state)
+            # ── Skip checkpoint replay event ───────────────────────────
+            # LangGraph emits the interrupted state as the first event when
+            # resuming. It's not new work — skip it and wait for actual
+            # forward progress from the next node.
             if event_count == 1 and status == resuming_from_status:
-                print(f"[RESUME] Skipping stale replay event #{event_count}")
+                print(f"[RESUME] Skipping checkpoint replay event (status={status})")
                 continue
 
-            # HITL: clarification needed again (LLM wants more info)
+            # ── Pipeline stage announcements ───────────────────────────
+            if status == "briefing":
+                await _send_ws(research_id, {
+                    "type": "pipeline_stage",
+                    "stage": "briefing",
+                    "message": "📋 Building context brief...",
+                })
+            elif status == "thinking":
+                await _send_ws(research_id, {
+                    "type": "pipeline_stage",
+                    "stage": "thinking",
+                    "message": "🧠 Extended thinking in progress...",
+                })
+            elif status == "planning" and event.get("problem_type") and not thinking_sent:
+                thinking_sent = True
+                await _send_ws(research_id, {
+                    "type": "thinking_complete",
+                    "problem_type":     event.get("problem_type", ""),
+                    "hypothesis":       event.get("hypothesis", ""),
+                    "done_criteria":    event.get("done_criteria", ""),
+                    "thinking_summary": event.get("thinking_summary", ""),
+                    "context_brief":    event.get("context_brief", {}),
+                })
+
+            # ── HITL: clarification loop ───────────────────────────────
             if status == "clarifying" and event.get("clarification_message"):
                 new_msg = event["clarification_message"]
-
-                # Only send if this is a genuinely new message from the LLM
-                if new_msg and new_msg != prev_clarification_msg:
+                if new_msg != prev_clarification_msg:
                     conversation = event.get("clarification_conversation", [])
                     conversation.append({"role": "assistant", "content": new_msg})
                     event["clarification_conversation"] = conversation
                     session["state"] = event
-
                     await _send_ws(research_id, {
                         "type": "clarification_needed",
                         "message": new_msg,
                     })
                     return
                 else:
-                    # Stale replay of old clarification — skip
-                    print(f"[RESUME] Skipping stale clarification replay")
                     continue
 
-            # HITL: plan ready for approval
-            if status == "awaiting_confirmation" and event.get("plan"):
+            # ── HITL: plan confirmation (send once only) ───────────────
+            if status == "awaiting_confirmation" and event.get("plan") and not plan_sent:
+                plan_sent = True
                 await _send_ws(research_id, {
                     "type": "plan_ready",
-                    "plan": event["plan"],
+                    "plan":  event["plan"],
                     "todos": event.get("todos", []),
                 })
                 return
@@ -518,31 +606,31 @@ async def _resume_graph(research_id: str):
                     add_message(chat_id, "assistant", event.get("report", ""), "research_report")
                 await _send_ws(research_id, {
                     "type": "report_complete",
-                    "report": event.get("report", ""),
-                    "sources": event.get("all_sources", []),
-                    "todos": event.get("todos", []),
+                    "report":   event.get("report", ""),
+                    "sources":  event.get("all_sources", []),
+                    "todos":    event.get("todos", []),
+                    "metadata": {
+                        "problem_type":  event.get("problem_type", ""),
+                        "hypothesis":    event.get("hypothesis", ""),
+                        "done_criteria": event.get("done_criteria", ""),
+                    },
                 })
                 return
 
             if status == "error":
                 await _send_ws(research_id, {
-                    "type": "error", "message": event.get("error", "Unknown error"),
+                    "type": "error",
+                    "message": event.get("error", "Unknown error"),
                 })
                 return
-
-        print(f"[RESUME] Stream ended, {event_count} events total")
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         await _send_ws(research_id, {"type": "error", "message": str(e)})
-
-
-async def _stream_progress(research_id: str, event: dict, prev_count: int):
-    """Stream new progress messages to WebSocket."""
-    progress = event.get("progress", [])
-    for msg in progress[prev_count:]:
-        await _send_ws(research_id, {"type": "progress", "message": msg})
+    finally:
+        session["resume_running"] = False
+        unregister_progress_callback(research_id)
 
 
 async def _send_ws(research_id: str, event: dict):
