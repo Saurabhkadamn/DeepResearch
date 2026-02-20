@@ -50,7 +50,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .msg-role{font-size:10px;color:var(--text2);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:.4px}
 .msg.user .msg-role{text-align:right}
 
-/* ── Pipeline Tracker (new nodes + research) ── */
+/* ── Pipeline Tracker ── */
 .tracker{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin:12px 0;overflow:hidden}
 .tracker-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg3)}
 .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
@@ -59,7 +59,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .tracker-body{padding:8px 0}
 .tracker-footer{padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between}
 
-/* ── Pipeline stages (briefing + thinking) ── */
+/* ── Pipeline stages ── */
 .pipeline-stages{padding:8px 12px;display:flex;flex-direction:column;gap:4px}
 .stage-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;border:1px solid transparent;font-size:12px;transition:all .3s}
 .stage-row.active{background:var(--bg3);border-color:var(--border)}
@@ -69,19 +69,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .stage-detail{font-size:11px;color:var(--text2);font-family:var(--mono)}
 .stage-spinner{width:12px;height:12px;border:1.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 
-/* ── Thinking card (shown after extended_thinking completes) ── */
+/* ── Thinking card ── */
 .thinking-card{margin:4px 12px 8px;border-radius:8px;border:1px solid var(--purple);overflow:hidden;background:#1a1028}
 .thinking-card-header{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#1d122e;cursor:pointer;font-size:12px;font-weight:600;color:var(--purple)}
 .thinking-card-body{padding:10px 14px;display:none;font-size:12px;line-height:1.7}
 .thinking-card.expanded .thinking-card-body{display:block}
 .thinking-field{margin-bottom:8px}
 .thinking-field-label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
-.thinking-field-value{color:var(--text);font-size:12px}
-.type-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
-.type-reasoning{background:#1e2a4a;color:var(--blue)}
-.type-research{background:#1a2a1a;color:var(--green)}
-.type-corpus{background:#2a1e1a;color:var(--orange)}
-.type-hybrid{background:#2a1a2a;color:var(--purple)}
+.thinking-field-value{color:var(--text);font-size:12px;white-space:pre-wrap;word-break:break-word}
 
 /* ── Context brief card ── */
 .brief-card{margin:4px 12px 4px;border-radius:8px;border:1px solid var(--border);overflow:hidden}
@@ -92,7 +87,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .brief-label{color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
 .brief-value{color:var(--text2)}
 
-/* ── Section card (research) ── */
+/* ── Section card ── */
 .sec-card{margin:4px 12px;border-radius:8px;border:1px solid var(--border);overflow:hidden;transition:border-color .3s}
 .sec-card.active{border-color:var(--accent)}
 .sec-card.done{border-color:var(--green)}
@@ -203,10 +198,10 @@ let sectionState = {};
 let vfsState = {};
 let roundNum = 0, completedSections = 0, totalSections = 0;
 
-// ── Pipeline stage state (new nodes) ──
-let pipelineStages = {};    // stage_key → {label, icon, status: 'waiting'|'active'|'done', detail}
-let thinkingData = null;    // result from thinking_complete event
-let briefData = null;       // context_brief from thinking_complete
+// ── Pipeline stage state ──
+let pipelineStages = {};
+let thinkingData   = null;
+let briefData      = null;
 
 // ── Chat management ──
 async function loadChats() {
@@ -255,7 +250,6 @@ async function sendMessage() {
   const msg = inp.value.trim();
   if (!msg) return;
 
-  // Disable immediately — before any await — to prevent double-submit on fast Enter/click
   const btn = document.getElementById('sendBtn');
   if (btn.disabled) return;
   btn.disabled = true;
@@ -300,10 +294,8 @@ async function startDeepResearch(query) {
   document.getElementById('progressPanel').style.display = 'block';
   document.getElementById('todoList').innerHTML = '';
 
-  // Close any existing WS — prevents old connection from still firing handleWS
   if (ws) { ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); ws = null; }
 
-  // Reset all state
   sectionState = {}; vfsState = {}; roundNum = 0;
   completedSections = 0; totalSections = 0; trackerId = null;
   pipelineStages = {}; thinkingData = null; briefData = null;
@@ -340,12 +332,10 @@ function handleWS(msg) {
       break;
 
     case 'pipeline_stage':
-      // briefing or thinking node just started
       handlePipelineStage(msg);
       break;
 
     case 'thinking_complete':
-      // thinking node finished — show hypothesis card
       handleThinkingComplete(msg);
       break;
 
@@ -393,44 +383,31 @@ function handleWS(msg) {
   }
 }
 
-// ── Pipeline stage events (briefing, thinking) ──
+// ── Pipeline stage events ──
 function handlePipelineStage(msg) {
   ensureTracker();
 
   const stageConfig = {
-    briefing: { label: 'Context Brief',     icon: '📋', color: 'var(--blue)' },
+    briefing: { label: 'Context Brief',     icon: '📋', color: 'var(--blue)'   },
     thinking: { label: 'Extended Thinking', icon: '🧠', color: 'var(--purple)' },
   };
 
   const cfg = stageConfig[msg.stage] || { label: msg.stage, icon: '⚙️', color: 'var(--text2)' };
 
-  // Mark previous stages done
   Object.keys(pipelineStages).forEach(k => {
-    if (pipelineStages[k].status === 'active') {
-      pipelineStages[k].status = 'done';
-    }
+    if (pipelineStages[k].status === 'active') pipelineStages[k].status = 'done';
   });
 
-  pipelineStages[msg.stage] = {
-    ...cfg,
-    status: 'active',
-    detail: msg.message || '',
-  };
-
+  pipelineStages[msg.stage] = { ...cfg, status: 'active', detail: msg.message || '' };
   renderPipelineStages();
 }
 
 function handleThinkingComplete(msg) {
   thinkingData = msg;
-  briefData = msg.context_brief || {};
+  briefData    = msg.context_brief || {};
 
-  // Mark thinking stage done
-  if (pipelineStages['thinking']) {
-    pipelineStages['thinking'].status = 'done';
-  }
-  if (pipelineStages['briefing']) {
-    pipelineStages['briefing'].status = 'done';
-  }
+  if (pipelineStages['thinking']) pipelineStages['thinking'].status = 'done';
+  if (pipelineStages['briefing']) pipelineStages['briefing'].status = 'done';
 
   renderPipelineStages();
   renderThinkingCard();
@@ -445,7 +422,6 @@ function renderPipelineStages() {
     stagesEl = document.createElement('div');
     stagesEl.id = trackerId + '-pipeline';
     stagesEl.className = 'pipeline-stages';
-    // Insert after simple-progress, before sections
     const body = trackerEl.querySelector('.tracker-body');
     if (body) body.appendChild(stagesEl);
   }
@@ -457,7 +433,6 @@ function renderPipelineStages() {
     const iconHtml = s.status === 'active'
       ? `<div class="stage-spinner"></div>`
       : `<span class="stage-icon">${s.status === 'done' ? '✅' : s.icon}</span>`;
-
     return `<div class="stage-row ${s.status}" style="${s.status === 'active' ? `border-color:${s.color}20;background:${s.color}08` : ''}">
       ${iconHtml}
       <span class="stage-label" style="color:${s.status === 'done' ? 'var(--text2)' : s.color}">${s.label}</span>
@@ -471,27 +446,17 @@ function renderThinkingCard() {
   const trackerEl = document.getElementById(trackerId);
   if (!trackerEl) return;
 
-  // Remove old thinking card if exists
   const old = document.getElementById(trackerId + '-thinking');
   if (old) old.remove();
 
-  const typeColors = {
-    reasoning: 'type-reasoning',
-    research:  'type-research',
-    corpus:    'type-corpus',
-    hybrid:    'type-hybrid',
-  };
-  const typeBadge = typeColors[thinkingData.problem_type] || 'type-research';
-
-  // Build brief rows if we have brief data
+  // Brief card — only if we have brief data with content
   let briefHtml = '';
   if (briefData && Object.keys(briefData).length > 0) {
     const rows = [
-      ['Intent',      briefData.user_intent],
-      ['Constraints', (briefData.implicit_constraints || []).join(', ') || 'None'],
-      ['Prior context', briefData.relevant_history],
-      ['Docs',        briefData.relevant_docs],
-    ].filter(([, v]) => v && v !== 'None' && v !== '');
+      ['Conversation', briefData.conversation_summary],
+      ['User',         briefData.user_background],
+      ['Documents',    briefData.relevant_docs],
+    ].filter(([, v]) => v && v !== 'None' && v !== 'Unknown' && v !== 'No prior conversation');
 
     if (rows.length > 0) {
       briefHtml = `
@@ -510,36 +475,29 @@ function renderThinkingCard() {
     }
   }
 
+  // Thinking card — shows the researcher's free-form reasoning
+  const thinkingText = thinkingData.thinking || '';
+  const preview      = thinkingText.slice(0, 600);
+  const hasMore      = thinkingText.length > 600;
+
   const card = document.createElement('div');
   card.id = trackerId + '-thinking';
   card.innerHTML = `
     ${briefHtml}
     <div class="thinking-card" id="${trackerId}-thinking-card">
       <div class="thinking-card-header" onclick="toggleThinking(this)">
-        🧠 Extended Thinking
-        <span class="type-badge ${typeBadge}" style="margin-left:8px">${thinkingData.problem_type || '?'}</span>
+        🧠 Researcher's Thinking
         <span style="margin-left:auto;opacity:.5">▾</span>
       </div>
       <div class="thinking-card-body">
-        ${thinkingData.hypothesis ? `
+        ${thinkingText ? `
           <div class="thinking-field">
-            <div class="thinking-field-label">Hypothesis</div>
-            <div class="thinking-field-value">${escHtml(thinkingData.hypothesis)}</div>
-          </div>` : ''}
-        ${thinkingData.done_criteria ? `
-          <div class="thinking-field">
-            <div class="thinking-field-label">Done when</div>
-            <div class="thinking-field-value">${escHtml(thinkingData.done_criteria)}</div>
-          </div>` : ''}
-        ${thinkingData.thinking_summary ? `
-          <div class="thinking-field">
-            <div class="thinking-field-label">Summary</div>
-            <div class="thinking-field-value">${escHtml(thinkingData.thinking_summary)}</div>
-          </div>` : ''}
+            <div class="thinking-field-label">Pre-Research Analysis</div>
+            <div class="thinking-field-value">${escHtml(preview)}${hasMore ? '<span style="color:var(--text3)">...</span>' : ''}</div>
+          </div>` : '<div style="color:var(--text3);font-size:12px">No thinking output available</div>'}
       </div>
     </div>`;
 
-  // Insert before sections div
   const sectionsEl = document.getElementById(trackerId + '-sections');
   if (sectionsEl) {
     trackerEl.querySelector('.tracker-body').insertBefore(card, sectionsEl);
@@ -548,12 +506,8 @@ function renderThinkingCard() {
   }
 }
 
-function toggleThinking(header) {
-  header.closest('.thinking-card').classList.toggle('expanded');
-}
-function toggleBrief(header) {
-  header.closest('.brief-card').classList.toggle('expanded');
-}
+function toggleThinking(header) { header.closest('.thinking-card').classList.toggle('expanded'); }
+function toggleBrief(header)    { header.closest('.brief-card').classList.toggle('expanded'); }
 
 // ── Research event handler ──
 function handleResearchEvent(e) {
@@ -650,7 +604,7 @@ function renderTracker() {
   secIds.forEach(id => {
     const s = sectionState[id];
     const isExpanded = (s.status === 'searching' || s.status === 'analyzing');
-    const cardCls = 'sec-card' + (s.status === 'done' ? ' done' : (s.status !== 'waiting' ? ' active' : '')) + (isExpanded ? ' expanded' : '');
+    const cardCls = 'sec-card' + (s.status === 'done' ? ' done' : s.status !== 'waiting' ? ' active' : '') + (isExpanded ? ' expanded' : '');
     const icon = s.status === 'done' ? '✅' : s.status === 'analyzing' ? '🧠' : s.status === 'searching' ? '🔍' : '⬜';
     const badgeCls = s.status === 'done' ? 'badge-done' : s.status === 'analyzing' ? 'badge-analyzing' : s.status === 'searching' ? 'badge-searching' : 'badge-waiting';
     const badgeText = s.status === 'done' ? (s.confidence * 100 | 0) + '%' : s.status;
@@ -736,16 +690,10 @@ function addReportBubble(content, metadata) {
   div.className = 'msg assistant';
   div.style.maxWidth = '100%';
 
-  // Build metadata tags
+  // Build metadata tags from new schema
   let metaTags = '';
-  if (metadata) {
-    const typeColors = { reasoning: '#1e3a5f', research: '#1a3a1a', corpus: '#3a1a0a', hybrid: '#2a1a3a' };
-    if (metadata.problem_type) {
-      metaTags += `<span class="report-tag" style="background:${typeColors[metadata.problem_type] || '#222'};color:var(--text2)">${metadata.problem_type}</span>`;
-    }
-    if (metadata.hypothesis) {
-      metaTags += `<span class="report-tag" style="background:#1a1a2e;color:var(--text2)" title="${escHtml(metadata.hypothesis)}">💡 hypothesis</span>`;
-    }
+  if (metadata && metadata.thinking) {
+    metaTags += `<span class="report-tag" style="background:#1a1a2e;color:var(--text2)" title="${escHtml(metadata.thinking.slice(0, 200))}">🧠 thinking</span>`;
   }
 
   div.innerHTML = `
@@ -765,7 +713,7 @@ function showPlan(plan, todos) {
   div.className = 'msg assistant';
   let html = `<div class="msg-role">Research Plan</div><div class="plan-card">
     <h4>${plan.summary || 'Research Plan'}</h4>
-    <div class="plan-meta">~${plan.estimated_time_seconds || 90}s estimated · ${(plan.sections || []).length} sections</div>`;
+    <div class="plan-meta">${(plan.sections || []).length} sections</div>`;
   (plan.sections || []).forEach((s, i) => {
     html += `<div class="plan-section">
       <strong>${i + 1}. ${escHtml(s.title)}</strong>
@@ -801,7 +749,7 @@ function updateTodos(todos) {
   el.innerHTML = '';
   todos.forEach(t => {
     const d = document.createElement('div');
-    const cls = t.status === 'done' ? 'todo-done' : t.status === 'in_progress' ? 'todo-progress' : 'todo-pending';
+    const cls  = t.status === 'done' ? 'todo-done' : t.status === 'in_progress' ? 'todo-progress' : 'todo-pending';
     const icon = t.status === 'done' ? '✅' : t.status === 'in_progress' ? '🔄' : '⬜';
     d.className = 'todo-item ' + cls;
     d.textContent = icon + ' ' + t.task;

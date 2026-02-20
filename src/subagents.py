@@ -1,6 +1,7 @@
 """
 Deep Research - Sub-Agent Spawning
 Each research section gets its own isolated LLM call with scoped context.
+Receives overall thinking summary so agents know the broader research goal.
 Pushes granular structured progress events for real-time UI streaming.
 """
 
@@ -15,21 +16,28 @@ async def run_research_subagent(
     section: dict,
     doc_ids: list[str],
     model: str = "",
+    thinking_summary: str = "",
     event_callback=None,
 ) -> dict:
     """
     Run a single research sub-agent for one section.
-    Pushes granular events via event_callback for real-time UI.
+    thinking_summary: first 500 chars of researcher's thinking — gives agent
+                      the broader goal so it stays on track.
     """
-    section_id = section.get("id", "unknown")
-    title = section.get("title", "Untitled")
-    description = section.get("description", "")
+    section_id     = section.get("id", "unknown")
+    title          = section.get("title", "Untitled")
+    description    = section.get("description", "")
     search_queries = section.get("search_queries", [])
-    relevant_docs = section.get("relevant_docs", [])
+    relevant_docs  = section.get("relevant_docs", [])
 
     async def emit(event_type, **data):
         if event_callback:
-            await event_callback({"event": event_type, "section_id": section_id, "section_title": title, **data})
+            await event_callback({
+                "event": event_type,
+                "section_id": section_id,
+                "section_title": title,
+                **data
+            })
 
     await emit("section_start", queries=search_queries)
 
@@ -40,9 +48,8 @@ async def run_research_subagent(
         results = await tavily_search(query)
         search_results[query] = results
 
-        # Emit each found URL
         for r in results:
-            url = r.get("url", "")
+            url    = r.get("url", "")
             domain = url.split("//")[-1].split("/")[0] if url else "unknown"
             await emit("search_result", query=query, url=url, domain=domain, title=r.get("title", ""))
 
@@ -54,9 +61,9 @@ async def run_research_subagent(
         doc = get_doc(doc_id)
         if doc:
             doc_extracts.append({
-                "doc_id": doc["id"],
+                "doc_id":   doc["id"],
                 "filename": doc["filename"],
-                "content": doc["content"],
+                "content":  doc["content"],
             })
 
     keyword_results = search_docs(title)
@@ -65,17 +72,19 @@ async def run_research_subagent(
             doc_extracts.append(kr)
 
     if doc_extracts:
-        await emit("docs_found", count=len(doc_extracts),
-                    filenames=[d.get("filename", d.get("doc_id", "?")) for d in doc_extracts])
+        await emit("docs_found",
+                   count=len(doc_extracts),
+                   filenames=[d.get("filename", d.get("doc_id", "?")) for d in doc_extracts])
 
     # 3. Format for LLM
     search_str = _format_search_results(search_results)
-    doc_str = _format_doc_extracts(doc_extracts)
+    doc_str    = _format_doc_extracts(doc_extracts)
 
     # 4. LLM analysis
     await emit("analyzing")
 
     prompt = RESEARCH_AGENT_PROMPT.format(
+        thinking_summary=thinking_summary or "Produce a comprehensive, well-sourced research section.",
         section_title=title,
         section_description=description,
         search_results=search_str or "No search results found.",
@@ -83,36 +92,43 @@ async def run_research_subagent(
     )
 
     response = await call_llm(prompt, model=model)
-    findings = parse_llm_json(response)
+    findings  = parse_llm_json(response)
 
     # 5. Build sources
-    sources = []
+    sources   = []
     seen_urls = set()
     for query_results in search_results.values():
         for r in query_results:
             url = r.get("url", "")
             if url and url not in seen_urls:
                 seen_urls.add(url)
-                sources.append({"url": url, "title": r.get("title", ""), "snippet": r.get("content", "")[:150]})
+                sources.append({
+                    "url":     url,
+                    "title":   r.get("title", ""),
+                    "snippet": r.get("content", "")[:150],
+                })
 
     total_results = sum(len(v) for v in search_results.values())
-    confidence = findings.get("confidence", 0.5) if findings else 0.5
-    content = findings.get("content", "") if findings else ""
-    content_size = len(content.encode("utf-8"))
+    confidence    = findings.get("confidence", 0.5) if findings else 0.5
+    content       = findings.get("content", "") if findings else ""
+    content_size  = len(content.encode("utf-8"))
 
-    await emit("section_done", search_count=total_results, source_count=len(sources),
-               confidence=confidence, content_size=content_size,
+    await emit("section_done",
+               search_count=total_results,
+               source_count=len(sources),
+               confidence=confidence,
+               content_size=content_size,
                gaps=findings.get("gaps", []) if findings else [])
 
     return {
-        "section_id": section_id,
+        "section_id":    section_id,
         "section_title": title,
-        "content": content,
-        "key_points": findings.get("key_points", []) if findings else [],
-        "sources": sources,
-        "confidence": confidence,
-        "gaps": findings.get("gaps", []) if findings else [],
-        "search_count": total_results,
+        "content":       content,
+        "key_points":    findings.get("key_points", []) if findings else [],
+        "sources":       sources,
+        "confidence":    confidence,
+        "gaps":          findings.get("gaps", []) if findings else [],
+        "search_count":  total_results,
     }
 
 
@@ -120,43 +136,63 @@ async def run_all_subagents(
     sections: list[dict],
     doc_ids: list[str],
     model: str = "",
+    thinking_summary: str = "",
     progress_callback=None,
     event_callback=None,
 ) -> list[dict]:
     """
     Run research sub-agents for ALL sections in parallel.
-    event_callback receives structured events for rich UI.
-    progress_callback receives text strings for simple progress log.
+    thinking_summary passed to each agent so they know the broader goal.
     """
-
-    # Emit initial section list
     if event_callback:
-        section_list = [{"id": s.get("id", ""), "title": s.get("title", ""), "queries": s.get("search_queries", [])} for s in sections]
-        await event_callback({"event": "research_start", "sections": section_list, "total": len(sections)})
+        section_list = [
+            {
+                "id":      s.get("id", ""),
+                "title":   s.get("title", ""),
+                "queries": s.get("search_queries", []),
+            }
+            for s in sections
+        ]
+        await event_callback({
+            "event":    "research_start",
+            "sections": section_list,
+            "total":    len(sections),
+        })
 
     completed = 0
 
     async def _run_one(section):
         nonlocal completed
-        section_id = section.get("id", "")
         title = section.get("title", "")
 
-        # Also push simple progress text
         if progress_callback:
             await progress_callback(f"🔍 Researching: {title}")
 
-        result = await run_research_subagent(section, doc_ids, model, event_callback=event_callback)
+        result = await run_research_subagent(
+            section,
+            doc_ids,
+            model,
+            thinking_summary=thinking_summary,
+            event_callback=event_callback,
+        )
 
         completed += 1
         if progress_callback:
-            await progress_callback(f"✅ {title}: {result.get('search_count', 0)} results, {result.get('confidence', 0):.0%} confidence")
+            await progress_callback(
+                f"✅ {title}: {result.get('search_count', 0)} results, "
+                f"{result.get('confidence', 0):.0%} confidence"
+            )
 
         if event_callback:
-            await event_callback({"event": "progress_update", "completed": completed, "total": len(sections)})
+            await event_callback({
+                "event":     "progress_update",
+                "completed": completed,
+                "total":     len(sections),
+            })
 
         return result
 
-    tasks = [_run_one(s) for s in sections]
+    tasks   = [_run_one(s) for s in sections]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     findings = []
@@ -167,7 +203,10 @@ async def run_all_subagents(
         findings.append(r)
 
     if event_callback:
-        await event_callback({"event": "research_round_done", "findings_count": len(findings)})
+        await event_callback({
+            "event":          "research_round_done",
+            "findings_count": len(findings),
+        })
 
     return findings
 
@@ -190,6 +229,6 @@ def _format_doc_extracts(extracts: list) -> str:
     lines = []
     for doc in extracts:
         filename = doc.get("filename", doc.get("doc_id", "unknown"))
-        content = doc.get("content", doc.get("excerpt", ""))[:400]
+        content  = doc.get("content", doc.get("excerpt", ""))[:400]
         lines.append(f"**📄 {filename}:**\n{content}\n")
     return "\n".join(lines)

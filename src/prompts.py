@@ -2,127 +2,59 @@
 Deep Research - LLM Prompts
 Detailed, example-rich prompts following deepagents best practices.
 
-Node → Prompt mapping:
-  collect_context     → (no LLM call)
-  context_brief       → CONTEXT_BRIEF_PROMPT
-  extended_thinking   → EXTENDED_THINKING_PROMPT
-  analyze_query       → QUERY_ANALYZER_PROMPT
-  generate_plan       → PLAN_GENERATOR_PROMPT
-  execute_research    → RESEARCH_AGENT_PROMPT  (in subagents.py)
-  synthesize_and_check→ SYNTHESIS_PROMPT
-  write_report        → REPORT_WRITER_PROMPT
+Node → Prompt mapping (in execution order):
+  collect_context      → (no LLM call)
+  analyze_query        → QUERY_ANALYZER_PROMPT
+  context_brief        → CONTEXT_BRIEF_PROMPT
+  extended_thinking    → EXTENDED_THINKING_PROMPT
+  generate_plan        → PLAN_GENERATOR_PROMPT
+  execute_research     → RESEARCH_AGENT_PROMPT  (in subagents.py)
+  synthesize_and_check → SYNTHESIS_PROMPT
+  write_report         → REPORT_WRITER_PROMPT
 """
+
 
 # ============================================================
 # CONTEXT BRIEF
-# Compresses raw context into a structured brief.
-# Called BEFORE extended_thinking so the thinking step gets
-# a clean, signal-rich brief rather than raw dumps.
+# Summarizes conversation history into clean background context.
+# Called BEFORE extended_thinking so the reasoning model gets
+# factual background — not interpretation.
 # ============================================================
-CONTEXT_BRIEF_PROMPT = """You are a context analyst. Your job is to read raw context and extract exactly what matters for the user's current query.
+CONTEXT_BRIEF_PROMPT = """You are a conversation summarizer.
+Your only job is to summarize the recent chat history so that
+a reasoning model can use it as background context.
 
 ## User Query:
 {query}
 
-## Raw Chat History (last {history_count} messages):
+## Chat History (last {history_count} messages):
 {chat_history}
 
 ## Available Documents:
 {doc_summaries}
 
-## Instructions:
-Analyze all of the above and produce a tight, structured brief that captures:
-1. What the user actually wants (their real intent, not just the surface words)
-2. Key entities, topics, domains involved
-3. Anything from chat history that's relevant to THIS query (ignore unrelated history)
-4. Which documents (if any) are relevant and why
-5. Implicit constraints the user hasn't stated but probably expects (e.g. India-specific, recent data, investment angle)
-6. What the user already seems to know (so we don't over-explain basics)
+## Your Rules:
+1. Summarize what has been discussed — nothing more
+2. Do NOT interpret the current query
+3. Do NOT extract intent, constraints, or entities
+4. Do NOT add any direction or angle
+5. Just give factual background: who asked what, what was answered
 
-## Examples of good intent extraction:
-- Query "AI in MSMEs" from a user who previously asked about startup funding → intent is probably "investment opportunities in AI tools for SMEs"
-- Query "compare LangGraph vs ADK" from a developer → intent is "which to use for my project, practical tradeoffs"
-- Query "Indian independence unsung heroes" with no history → intent is "discover lesser-known historical figures"
+## What to capture:
 
-## Response Format (strict JSON):
-{{
-    "user_intent": "One clear sentence: what the user is actually trying to accomplish",
-    "key_entities": ["entity1", "entity2", "entity3"],
-    "relevant_history": "What from chat history actually matters for this query. 'None' if nothing relevant.",
-    "relevant_docs": "Which documents are useful and why. 'None' if no docs are relevant.",
-    "implicit_constraints": ["constraint1", "constraint2"],
-    "what_user_already_knows": "What background knowledge they seem to have, so we don't over-explain",
-    "missing_context": "What we don't know about the user's needs that would help us. 'None' if we have enough."
-}}"""
+**conversation_summary** — What has been discussed in recent messages.
+  If no history, write "No prior conversation."
 
+**user_background** — Any evidence of who the user is or their expertise
+  from the conversation. Write "Unknown" if no evidence.
 
-# ============================================================
-# EXTENDED THINKING
-# The reasoning step that runs BEFORE analyze_query.
-# Uses a thinking/reasoning model to form a hypothesis
-# and decide the right research approach.
-# ============================================================
-EXTENDED_THINKING_PROMPT = """You are a research strategist. Before any research begins, think carefully about this problem.
-
-## Context Brief:
-**User Intent:** {user_intent}
-**Key Entities:** {key_entities}
-**Relevant History:** {relevant_history}
-**Relevant Docs:** {relevant_docs}
-**Implicit Constraints:** {implicit_constraints}
-**What User Already Knows:** {what_user_already_knows}
-**Missing Context:** {missing_context}
-
-## Original Query:
-{query}
-
-## Your Task:
-Think through this problem carefully. You need to:
-
-### 1. Classify Problem Type
-Decide what KIND of problem this is:
-
-**"reasoning"** — The answer can be constructed from knowledge + light verification.
-  Examples: "Compare LangGraph vs ADK architecturally", "Explain how transformers work", "What are the tradeoffs of X"
-  Approach: Reason from first principles, use 2-3 searches to verify recency only.
-
-**"research"** — The answer requires current information from the web.
-  Examples: "EV market size in India 2025", "Latest AI funding rounds", "Current government policies on X"
-  Approach: Heavy web research needed, knowledge may be stale.
-
-**"corpus"** — The answer lives in uploaded documents.
-  Examples: "Summarize this report", "What does the roadmap say about Q3", "Find all mentions of X in the docs"
-  Approach: Focus on document analysis, minimal web search.
-
-**"hybrid"** — Needs both reasoning AND research.
-  Examples: "What should our strategy be given current market conditions" (needs research for conditions, reasoning for strategy)
-
-### 2. State Your Hypothesis
-What do you already believe the answer looks like, before any research?
-This is not the final answer — it's your starting assumption that research will test.
-
-### 3. Identify What Would Change Your Hypothesis
-What specific findings would confirm OR contradict your starting assumption?
-This shapes what we search for.
-
-### 4. Define Done Criteria
-What does a COMPLETE answer look like for THIS specific query?
-Be specific — "a good report" is not a done criteria.
-Example: "Done when we have: market size with source, top 5 players with funding, 3 real case studies with ROI numbers, and regulatory landscape"
-
-### 5. Recommend Research Approach
-Based on problem type, what's the right approach?
+**relevant_docs** — Which uploaded documents exist that may be useful.
+  Just name them. Write "None" if no documents.
 
 ## Response Format (strict JSON):
 {{
-    "problem_type": "reasoning" | "research" | "corpus" | "hybrid",
-    "hypothesis": "Your starting assumption about what the answer looks like",
-    "what_would_confirm": "Specific findings that would confirm the hypothesis",
-    "what_would_contradict": "Specific findings that would change the hypothesis",
-    "done_criteria": "Specific, concrete description of what a complete answer contains",
-    "recommended_approach": "Brief description of how to approach this — what to search for, what to reason about, what to look for in docs",
-    "key_questions_to_answer": ["Question 1 the research must answer", "Question 2", "Question 3"],
-    "thinking_summary": "2-3 sentence summary of your analysis, written to be passed to downstream steps"
+    "conversation_summary": "What was discussed in recent chat, or 'No prior conversation'"
+  
 }}"""
 
 
@@ -130,7 +62,7 @@ Based on problem type, what's the right approach?
 # QUERY ANALYZER
 # Runs BEFORE context_brief and extended_thinking.
 # Only has raw query + chat history + docs — no thinking fields yet.
-# Job: simple vs deep, needs clarification?
+# Job: classify simple vs deep, decide if clarification needed.
 # ============================================================
 QUERY_ANALYZER_PROMPT = """You are a research query analyzer. Your job is to quickly classify a query and decide if we need more information before proceeding.
 
@@ -172,11 +104,6 @@ Good: "Quick question before I dive in — are you looking at this from an inves
 
 Bad: "Please specify: 1) use case 2) geography 3) time frame"
 
-### 3. Classify the research type (for routing only)
-What kind of problem is this at a surface level?
-- "simple" = direct answer possible
-- "deep" = needs research
-
 ## Response Format (strict JSON):
 {{
     "mode": "simple" or "deep",
@@ -185,72 +112,106 @@ What kind of problem is this at a surface level?
     "reasoning": "One sentence explaining your classification"
 }}
 
-# NOTE: Do NOT include problem_type, hypothesis, or done_criteria — those are computed later by a dedicated reasoning step."""
+# NOTE: Do NOT include problem_type, hypothesis, or done_criteria — those come later from the reasoning step."""
+
+
+# ============================================================
+# EXTENDED THINKING
+# First-principles reasoning step that runs AFTER context_brief.
+# Uses a thinking/reasoning model to deeply understand the problem
+# before any research plan is made.
+# Output is free-form reasoning text — not structured JSON.
+# The planner reads this thinking and decides what to go find.
+# ============================================================
+EXTENDED_THINKING_PROMPT = """You are a deep researcher preparing to investigate a question.
+
+## Query:
+{query}
+
+## Background:
+{conversation_summary}
+
+## Available Documents:
+{relevant_docs}
+
+---
+
+Before any research begins, think deeply about this problem.
+
+What is this question really about at its core?
+What are the important concepts and how do they relate to each other?
+What would you need to know to answer this completely and well?
+What correlations and dependencies matter here?
+What would make the difference between a shallow answer and a truly complete one?
+
+Think freely. Write your reasoning. This thinking will guide everything that comes after."""
 
 
 # ============================================================
 # PLAN GENERATOR
-# Now uses thinking summary + done criteria to create a focused plan.
+# Reads the researcher's free-form thinking and turns it into
+# a concrete, ordered research plan.
+# Does NOT receive structured fields like hypothesis or done_criteria —
+# those concepts live inside the thinking text.
 # ============================================================
-PLAN_GENERATOR_PROMPT = """You are a research planner. Create a detailed, actionable research plan.
+PLAN_GENERATOR_PROMPT = """You are a research planner.
 
-## Pre-Analysis (from thinking step):
-**Problem Type:** {problem_type}
-**Hypothesis:** {hypothesis}
-**Done Criteria:** {done_criteria}
-**Key Questions to Answer:** {key_questions}
-**Recommended Approach:** {recommended_approach}
+A researcher has already thought deeply about the question below.
+Your job is to read that thinking and turn it into a concrete research plan.
 
-## User Query: {query}
-## Context Brief: {context_brief}
-## Clarification Conversation: {clarification_conversation}
-## Available Documents: {doc_summaries}
+## Query:
+{query}
 
-## Instructions:
-Create 3-6 research sections. Each section should map to one of the key questions identified in the thinking step.
+## Background:
+{conversation_summary}
 
-For each section:
-1. Clear, specific title
-2. What exactly to research (be specific, reference the done_criteria)
-3. 2-3 targeted search queries — specific enough to get good results
-4. Whether uploaded documents are relevant
+## Researcher's Thinking:
+{thinking}
 
-## Rules:
-- Sections should COLLECTIVELY satisfy the done_criteria — check them off mentally
-- If problem_type is "reasoning", keep search queries lighter, focus on verification
-- If problem_type is "corpus", make doc analysis the primary approach
-- Make search queries SPECIFIC: "AI education market size India 2025" beats "AI education"
-- Order logically: background → analysis → comparison → conclusions
+## Available Documents:
+{relevant_docs}
 
-## Example Plan:
+---
+
+Read the thinking carefully. The researcher has identified what matters,
+what connects to what, and what a complete answer requires.
+
+Now create sections that go find exactly that. Each section should address
+something the thinking says needs to be understood.
+
+For each section write:
+- A clear title
+- What specifically to find or understand in this section
+- 2-3 specific search queries (or leave empty if the answer is in documents)
+
+Order sections so understanding builds — foundational things first,
+synthesis and implications last.
+
+Return as JSON:
+
 {{
-    "summary": "Comparative analysis of AI platforms for K-12 education",
-    "estimated_time_seconds": 120,
     "sections": [
         {{
             "id": "sec_1",
-            "title": "Current AI-in-Education Market Overview",
-            "description": "Market size, growth trends, key players — maps to done criteria: market sizing",
-            "search_queries": ["AI education market size 2025", "edtech AI funding trends India"],
-            "relevant_docs": ["doc_002"]
-        }},
-        {{
-            "id": "sec_2",
-            "title": "Platform Feature Comparison",
-            "description": "Top 5 platforms on features, pricing, integrations",
-            "search_queries": ["AI tutoring platform comparison 2025", "LMS AI integration features"],
-            "relevant_docs": ["doc_001", "doc_002"]
+            "title": "...",
+            "description": "what to find and why it matters for the complete answer",
+            "search_queries": ["specific query 1", "specific query 2"],
+            "relevant_docs": []
         }}
     ]
-}}
-
-## Generate the plan now (strict JSON):"""
+}}"""
 
 
 # ============================================================
-# SUB-AGENT RESEARCH PROMPT (unchanged from original)
+# SUB-AGENT RESEARCH PROMPT
+# Each agent handles ONE section.
+# Receives the overall thinking so it knows the broader goal —
+# not just its isolated section.
 # ============================================================
 RESEARCH_AGENT_PROMPT = """You are a focused research agent investigating ONE specific section.
+
+## Overall Research Goal:
+{thinking_summary}
 
 ## Your Section: {section_title}
 ## Section Goal: {section_description}
@@ -271,6 +232,7 @@ RESEARCH_AGENT_PROMPT = """You are a focused research agent investigating ONE sp
 ## Important:
 - Be specific. Include numbers, dates, names where available.
 - Don't pad with filler. Every sentence should add information.
+- Stay focused on what the overall research goal needs — not just your section in isolation.
 - If search results are thin, say so honestly in the gaps field.
 
 ## Response (strict JSON):
@@ -286,25 +248,36 @@ RESEARCH_AGENT_PROMPT = """You are a focused research agent investigating ONE sp
 
 
 # ============================================================
-# SYNTHESIS PROMPT (updated to use done_criteria)
+# SYNTHESIS / QUALITY CHECK
+# Checks completeness of findings against the researcher's
+# original thinking — not against a rigid done_criteria field.
 # ============================================================
 SYNTHESIS_PROMPT = """You are a research quality checker.
 
-## Original Query: {query}
-## Done Criteria (what complete looks like): {done_criteria}
-## Research Plan: {plan_summary}
+## Original Query:
+{query}
 
-## Findings Summary:
+## Researcher's Thinking (what a complete answer requires):
+{thinking}
+
+## Research Plan:
+{plan_summary}
+
+## Findings So Far:
 {findings_summary}
 
 ## Task:
-Review the completeness of research findings against the done_criteria specifically.
-Determine if we have enough to write a good report, or if critical gaps need filling.
+Review the findings against the researcher's thinking.
+The thinking describes what a complete answer looks like — check if we're there.
+
+Ask yourself:
+- Does what we've found actually address what the thinking said mattered?
+- Are the key correlations and dependencies the researcher identified now understood?
+- What is still missing or thin?
 
 ## Rules:
-- Check each item in done_criteria: is it covered?
-- If most sections have confidence > 0.7 and done_criteria is satisfied → COMPLETE
-- If any done_criteria item is missing or any section has confidence < 0.5 → MORE RESEARCH needed
+- If the core of what the thinking asked for is covered → COMPLETE
+- If important things the thinking flagged are still missing → MORE RESEARCH needed
 - Maximum {max_loops} research rounds total. Current round: {current_loop}
 - If at max rounds, mark complete regardless
 
@@ -312,27 +285,32 @@ Determine if we have enough to write a good report, or if critical gaps need fil
 {{
     "is_complete": true or false,
     "completeness_score": 0.85,
-    "done_criteria_coverage": "Which done criteria items are satisfied and which are missing",
-    "reasoning": "Why research is or isn't complete",
+    "reasoning": "Why research is or isn't complete relative to the thinking",
     "gaps_to_fill": [
         {{
             "section_id": "sec_1",
-            "gap": "Missing pricing data for Squirrel AI",
-            "search_queries": ["Squirrel AI pricing education 2025"]
+            "gap": "What is still missing",
+            "search_queries": ["specific query to fill this gap"]
         }}
     ]
 }}"""
 
 
 # ============================================================
-# REPORT WRITER (updated to include hypothesis for framing)
+# REPORT WRITER
+# Writes the final report informed by the researcher's thinking.
+# Uses thinking for framing and direction — not hypothesis/done_criteria fields.
 # ============================================================
 REPORT_WRITER_PROMPT = """You are an expert research report writer.
 
-## Original Query: {query}
-## Research Hypothesis (starting assumption): {hypothesis}
-## Done Criteria (what this report must cover): {done_criteria}
-## Research Plan: {plan_summary}
+## Original Query:
+{query}
+
+## Researcher's Thinking (framing, what complete looks like):
+{thinking}
+
+## Research Plan:
+{plan_summary}
 
 ## All Research Findings:
 {all_findings}
@@ -341,14 +319,16 @@ REPORT_WRITER_PROMPT = """You are an expert research report writer.
 {all_sources}
 
 ## Instructions:
-Write a comprehensive research report in Markdown following this structure:
+Write a comprehensive research report in Markdown.
 
-1. **Title** — Clear, descriptive title
-2. **Executive Summary** — 2-3 sentences capturing the key answer. Does it confirm or contradict the initial hypothesis?
-3. **Sections** — One section per research area, with:
-   - Specific data points and facts
-   - Inline citations: [Source Title](url)
-   - Analysis and insights, not just raw facts
+Use the researcher's thinking to frame the report — it describes what matters,
+what connects to what, and what a complete answer looks like. Let that shape
+how you structure and emphasize things.
+
+Structure:
+1. **Title** — Clear, descriptive
+2. **Executive Summary** — 2-3 sentences capturing the key answer
+3. **Sections** — One per research area, with specific data points, inline citations, and analysis
 4. **Key Takeaways** — 3-5 bullet points of the most important findings
 5. **Sources** — Numbered list of all sources used
 
@@ -358,6 +338,6 @@ Write a comprehensive research report in Markdown following this structure:
 - Be concise but thorough — quality over quantity
 - If documents were referenced, cite them as "From uploaded documents"
 - Write in a professional but readable tone
-- Ensure all done_criteria items are addressed
+- Address what the thinking said mattered — not just what was easy to find
 
 Write the complete report now:"""
