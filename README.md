@@ -1,6 +1,6 @@
 # 🔬 Deep Research Agent
 
-A deep research agent built on **raw LangGraph** with patterns borrowed from LangChain's DeepAgents — planning tools, sub-agent spawning, virtual filesystem for context management.
+A deep research agent built on **raw LangGraph** with patterns borrowed from LangChain's DeepAgents — planning tools, sub-agent spawning, virtual filesystem for context management..
 
 ## Architecture.
 
